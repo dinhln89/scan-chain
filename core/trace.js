@@ -161,7 +161,7 @@ async function analyzeTx(txHash) {
 
   let isTransferSender = false;
   const froms = transfers.map((t) => t.from.toLowerCase());
-  if (froms.includes(sender) || froms.some((f) => inputSet.has(f))) {
+  if (froms.includes(sender)) {
     isTransferSender = true;
   }
 

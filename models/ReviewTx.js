@@ -22,11 +22,6 @@ const ReviewTx = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
-    isTransferSender: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: false,
-    },
     isGetReserves: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

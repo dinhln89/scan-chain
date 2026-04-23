@@ -9,26 +9,26 @@ async function processTx(tx) {
   const { addresses, calls, transfers, isCallInput, isTransferSender } =
     await analyzeTx(tx.hash);
 
-  const getReservesAddrs = new Set(
-    calls
-      .filter((c) => c.fn === "getReserves()")
-      .map((c) => c.to?.toLowerCase()),
-  );
-  const balanceOfAddrs = new Set(
-    calls
-      .filter((c) => c.fn === "balanceOf(address)")
-      .map((c) => c.to?.toLowerCase()),
-  );
+  if (isTransferSender) {
+    const getReservesAddrs = new Set(
+      calls
+        .filter((c) => c.fn === "getReserves()")
+        .map((c) => c.to?.toLowerCase()),
+    );
+    const balanceOfAddrs = new Set(
+      calls
+        .filter((c) => c.fn === "balanceOf(address)")
+        .map((c) => c.to?.toLowerCase()),
+    );
 
-  await ReviewTx.upsert({
-    txHash: tx.hash,
-    address: tx.to.toLowerCase(),
-    isCallInput: isCallInput,
-    isTransferSender: isTransferSender,
-    isGetReserves: getReservesAddrs.length > 0,
-    isBalanceOf: balanceOfAddrs.length > 0,
-  });
-
+    await ReviewTx.upsert({
+      txHash: tx.hash,
+      address: tx.to.toLowerCase(),
+      isCallInput: isCallInput,
+      isGetReserves: getReservesAddrs.length > 0,
+      isBalanceOf: balanceOfAddrs.length > 0,
+    });
+  }
 }
 
 async function processNext() {

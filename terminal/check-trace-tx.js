@@ -7,11 +7,13 @@ async function main() {
     process.exit(1);
   }
 
-  const { addresses, calls, transfers } = await analyzeTx(txHash);
+  const { addresses, calls, transfers, isCallInput, isTransferSender } = await analyzeTx(txHash);
 
   console.log("=".repeat(60));
-  console.log("TX   :", txHash);
-  console.log("Link :", `https://bscscan.com/tx/${txHash}`);
+  console.log("TX              :", txHash);
+  console.log("Link            :", `https://bscscan.com/tx/${txHash}`);
+  console.log("isCallInput     :", isCallInput);
+  console.log("isTransferSender:", isTransferSender);
   console.log("=".repeat(60));
 
   console.log("\n[Input Addresses]");
