@@ -42,7 +42,7 @@ const ReviewTx = sequelize.define(
     tableName: "review_txs",
     timestamps: false,
     indexes: [
-      { unique: true, fields: ["txHash", "address", "source"] },
+      { unique: true, fields: ["txHash"] },
       { fields: ["address"] },
       { fields: ["txHash"] },
     ],
