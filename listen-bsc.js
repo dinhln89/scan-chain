@@ -3,6 +3,7 @@ const sequelize = require("./db");
 const Setting = require("./models/Setting");
 const Transaction = require("./models/Transaction");
 const { getAll: getIgnored } = require("./core/ignore-address");
+const { getAll: getIgnoredMethods } = require("./core/ignore-method");
 require("dotenv").config();
 
 const BSC_RPC =
@@ -35,11 +36,13 @@ async function processBlock() {
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
   const ignoredSet = getIgnored();
+  const ignoredMethods = getIgnoredMethods();
 
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();
     const to = tx.to?.toLowerCase();
-    return !ignoredSet.has(from) && !ignoredSet.has(to);
+    const selector = tx.input?.slice(0, 10)?.toLowerCase();
+    return !ignoredSet.has(from) && !ignoredSet.has(to) && !ignoredMethods.has(selector);
   });
 
   console.log(`  -> Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`);
