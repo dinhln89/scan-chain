@@ -1,4 +1,4 @@
-const { add } = require('../core/ignore-method');
+const IgnoreMethod = require('../core/ignore-method');
 
 const selector = process.argv[2];
 
@@ -9,7 +9,7 @@ if (!selector) {
 }
 
 try {
-  const added = add(selector);
+  const added = IgnoreMethod.add(selector);
   if (added) {
     console.log('Da them:', selector.toLowerCase());
   } else {

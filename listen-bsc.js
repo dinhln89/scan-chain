@@ -2,8 +2,8 @@ const { Web3 } = require("web3");
 const sequelize = require("./db");
 const Setting = require("./models/Setting");
 const Transaction = require("./models/Transaction");
-const { getAll: getIgnored } = require("./core/ignore-address");
-const { getAll: getIgnoredMethods } = require("./core/ignore-method");
+const IgnoreAddress = require("./core/ignore-address");
+const IgnoreMethod = require("./core/ignore-method");
 require("dotenv").config();
 
 const BSC_RPC =
@@ -35,8 +35,8 @@ async function processBlock() {
 
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
-  const ignoredSet = getIgnored();
-  const ignoredMethods = getIgnoredMethods();
+  const ignoredSet = IgnoreAddress.getAll();
+  const ignoredMethods = IgnoreMethod.getAll();
 
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();

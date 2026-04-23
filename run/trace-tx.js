@@ -79,9 +79,10 @@ async function processNext() {
     await tx.update({ processed: true });
     console.log('  -> Done');
   } catch (err) {
-    if (err.message === 'NO_ERC20_TRANSFER') {
+    const skip = ['NO_ERC20_TRANSFER', 'IGNORED_METHOD', 'IGNORED_ADDRESS'];
+    if (skip.includes(err.message)) {
       await tx.update({ processed: true });
-      console.log('  -> Bo qua (khong co ERC20 Transfer)');
+      console.log(`  -> Bo qua (${err.message})`);
     } else {
       console.error(`  -> Loi: ${err.message}`);
     }

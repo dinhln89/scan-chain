@@ -1,4 +1,4 @@
-const { add } = require('../core/ignore-address');
+const IgnoreAddress = require('../core/ignore-address');
 
 const address = process.argv[2];
 
@@ -12,7 +12,7 @@ if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
   process.exit(1);
 }
 
-const added = add(address);
+const added = IgnoreAddress.add(address);
 if (added) {
   console.log('Da them:', address.toLowerCase());
 } else {

@@ -2,6 +2,9 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
+const IgnoreAddress = require('./ignore-address');
+const IgnoreMethod  = require('./ignore-method');
+
 const BSC_RPC =
   process.env.BSC_RPC ||
   "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
@@ -98,6 +101,14 @@ async function analyzeTx(txHash) {
   ]);
 
   if (!tx) throw new Error("Khong tim thay tx: " + txHash);
+
+  const ignoredAddrs   = IgnoreAddress.getAll();
+  const ignoredMethods = IgnoreMethod.getAll();
+  const selector       = tx.input?.slice(0, 10)?.toLowerCase();
+
+  if (ignoredMethods.has(selector)) throw new Error('IGNORED_METHOD');
+  if (ignoredAddrs.has(tx.from?.toLowerCase())) throw new Error('IGNORED_ADDRESS');
+  if (tx.to && ignoredAddrs.has(tx.to.toLowerCase())) throw new Error('IGNORED_ADDRESS');
 
   const addresses = extractAddressesFromInput(tx.input);
   const calls = extractCalls([trace, ...(trace.calls || [])]);
