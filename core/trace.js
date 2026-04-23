@@ -76,17 +76,19 @@ function decodeTransfers(logs) {
 }
 
 async function analyzeTx(txHash) {
-  const [tx, trace, receipt] = await Promise.all([
+  const receipt = await rpc('eth_getTransactionReceipt', [txHash]);
+  const transfers = decodeTransfers(receipt?.logs || []);
+  if (transfers.length === 0) throw new Error('NO_ERC20_TRANSFER');
+
+  const [tx, trace] = await Promise.all([
     rpc('eth_getTransactionByHash', [txHash]),
     rpc('debug_traceTransaction', [txHash, { tracer: 'callTracer' }]),
-    rpc('eth_getTransactionReceipt', [txHash]),
   ]);
 
   if (!tx) throw new Error('Khong tim thay tx: ' + txHash);
 
   const addresses = extractAddressesFromInput(tx.input);
   const calls     = extractCalls([trace, ...(trace.calls || [])]);
-  const transfers = decodeTransfers(receipt?.logs || []);
 
   calls.forEach((c) => {
     if (c.fn === 'getReserves()') c.decoded = decodeGetReserves(c.output);
