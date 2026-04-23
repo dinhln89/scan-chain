@@ -5,6 +5,18 @@ require("dotenv").config({
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
 
+const ignoreSwap = {
+  "0x8803dbee":
+    "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+  "0x18cbafe5": "swapExactETHForTokens(uint256,address[],address,uint256)",
+  "0x7ff36ab5":
+    "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+  "0x38ed1739":
+    "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+  "0x5c11d795":
+    "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+};
+
 const BSC_RPC =
   process.env.BSC_RPC ||
   "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
@@ -31,15 +43,18 @@ const TRANSFER_TOPIC =
 function extractCalls(calls = [], results = []) {
   for (const call of calls) {
     const selector = call.input?.slice(0, 10)?.toLowerCase();
-    if (selector && SELECTORS[selector]) {
+    if (selector || SELECTORS[selector]) {
       results.push({
-        fn: SELECTORS[selector],
+        selector,
+        fn: selector in SELECTORS ? SELECTORS[selector] : selector,
         to: call.to,
         input: call.input,
         output: call.output,
       });
     }
-    if (call.calls) extractCalls(call.calls, results);
+    if (selector && !ignoreSwap[selector]) {
+      if (call.calls) extractCalls(call.calls, results);
+    }
   }
   return results;
 }
@@ -128,11 +143,6 @@ async function analyzeTx(txHash) {
   ];
   if (matchedTos.length === 0) throw new Error("NO_ERC20_TRANSFER");
 
-  // dam bao it nhat 1 dia chi khong phai contract (EOA)
-  const contractFlags = await Promise.all(matchedTos.map((a) => isContract(a)));
-  const hasEOA = contractFlags.some((flag) => !flag);
-  if (!hasEOA) throw new Error("NO_ERC20_TRANSFER");
-
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
     if (c.fn === "balanceOf(address)") {
@@ -158,34 +168,10 @@ async function analyzeTx(txHash) {
   return { txHash, addresses, calls, transfers, isCallInput, isTransferSender };
 }
 
-let contractSynced = false;
-
-async function isContract(address) {
-  const Contract = require("../models/Contract");
-  const addr = address.toLowerCase();
-
-  if (!contractSynced) {
-    await Contract.sync();
-    contractSynced = true;
-  }
-
-  const cached = await Contract.findOne({
-    where: { address: addr },
-    attributes: ["id"],
-  });
-  if (cached) return true;
-
-  const code = await rpc("eth_getCode", [addr, "latest"]);
-  const result = code && code !== "0x";
-  if (result) await Contract.upsert({ address: addr, type: "bsc" });
-  return result;
-}
-
 module.exports = {
   analyzeTx,
   extractAddressesFromInput,
   extractCalls,
   decodeTransfers,
   rpc,
-  isContract,
 };

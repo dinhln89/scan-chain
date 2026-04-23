@@ -1,7 +1,7 @@
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
-const { analyzeTx, isContract } = require("../core/trace");
+const { analyzeTx } = require("../core/trace");
 
 async function processTx(tx) {
   console.log(`  Hash  : https://bscscan.com/tx/${tx.hash}`);
@@ -29,22 +29,6 @@ async function processTx(tx) {
     isBalanceOf: balanceOfAddrs.length > 0,
   });
 
-  console.log(`  ReviewTx: ${seen.size} records inserted`);
-
-  // collect all unique addresses
-  const allAddrs = [...new Set([...seen].map((k) => k.split(":")[0]))];
-
-  // check contract in parallel (batch 5)
-  let contractCount = 0;
-  for (let i = 0; i < allAddrs.length; i += 5) {
-    const batch = allAddrs.slice(i, i + 5);
-    await Promise.all(
-      batch.map(async (addr) => {
-        if (await isContract(addr)) contractCount++;
-      }),
-    );
-  }
-  console.log(`  Contracts: ${contractCount} inserted`);
 }
 
 async function processNext() {
