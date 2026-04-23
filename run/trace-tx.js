@@ -12,7 +12,6 @@ async function processTx(tx) {
     isCallInput,
     isTransferSender,
     selector,
-    tokenNames,
     tokenSymbols,
   } = await analyzeTx(tx.hash);
 
@@ -37,7 +36,6 @@ async function processTx(tx) {
     //   isBalanceOf: balanceOfAddrs.size > 0,
     // });
 
-    const tokenNameList = Object.values(tokenNames).filter(Boolean).join(", ");
     const tokenSymbolList = Object.values(tokenSymbols).filter(Boolean).join(", ");
 
     await append([
@@ -50,7 +48,6 @@ async function processTx(tx) {
         balanceOfAddrs.size > 0 ? "YES" : "NO",
         tx.blockNumber,
         selector ?? "",
-        tokenNameList,
         tokenSymbolList,
       ],
     ]);

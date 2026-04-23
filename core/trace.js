@@ -177,17 +177,9 @@ async function analyzeTx(txHash) {
         .map((t) => t.token.toLowerCase()),
     ),
   ];
-  const [tokenNames, tokenSymbols] = await Promise.all([
-    Promise.all(
-      tokensSentToSender.map(async (addr) => [addr, await getErc20Name(addr)]),
-    ).then(Object.fromEntries),
-    Promise.all(
-      tokensSentToSender.map(async (addr) => [
-        addr,
-        await getErc20Symbol(addr),
-      ]),
-    ).then(Object.fromEntries),
-  ]);
+  const tokenSymbols = await Promise.all(
+    tokensSentToSender.map(async (addr) => [addr, await getErc20Symbol(addr)]),
+  ).then(Object.fromEntries);
 
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
@@ -219,7 +211,6 @@ async function analyzeTx(txHash) {
     isCallInput,
     isTransferSender,
     selector,
-    tokenNames,
     tokenSymbols,
   };
 }
