@@ -63,6 +63,7 @@ async function processBlock() {
 }
 
 async function main() {
+  await sequelize.ensureDatabase();
   await sequelize.sync();
   console.log("Bat dau lang nghe BSC...");
 
