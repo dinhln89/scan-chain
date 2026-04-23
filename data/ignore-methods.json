@@ -8,5 +8,9 @@
   "0x313ce567": "mint(address,uint256)",
   "0x40c10f19": "burn(uint256)",
   "0x9dc29fac": "burnFrom(address,uint256)",
-  "0xb858183f": ""
+  "0xb858183f": "",
+  "0x5c11d795": "",
+  "0x38ed1739": "",
+  "0x7ff36ab5": "",
+  "0x414bf389": ""
 }

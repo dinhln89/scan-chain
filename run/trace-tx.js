@@ -2,12 +2,17 @@ const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx } = require("../core/trace");
+const { append } = require("../core/sheets");
 
 async function processTx(tx) {
-  console.log(`  Hash  : https://bscscan.com/tx/${tx.hash}`);
-
-  const { addresses, calls, transfers, isCallInput, isTransferSender } =
-    await analyzeTx(tx.hash);
+  const {
+    addresses,
+    calls,
+    transfers,
+    isCallInput,
+    isTransferSender,
+    selector,
+  } = await analyzeTx(tx.hash);
 
   if (isTransferSender) {
     const getReservesAddrs = new Set(
@@ -24,10 +29,24 @@ async function processTx(tx) {
     await ReviewTx.upsert({
       txHash: tx.hash,
       address: tx.to.toLowerCase(),
-      isCallInput: isCallInput,
-      isGetReserves: getReservesAddrs.length > 0,
-      isBalanceOf: balanceOfAddrs.length > 0,
+      selector,
+      isCallInput,
+      isGetReserves: getReservesAddrs.size > 0,
+      isBalanceOf: balanceOfAddrs.size > 0,
     });
+
+    await append([
+      [
+        tx.hash,
+        `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
+        `https://bscscan.com/tx/${tx.hash}`,
+        isCallInput ? "YES" : "NO",
+        getReservesAddrs.size > 0 ? "YES" : "NO",
+        balanceOfAddrs.size > 0 ? "YES" : "NO",
+        tx.blockNumber,
+        selector ?? "",
+      ],
+    ]);
   }
 }
 
@@ -46,9 +65,14 @@ async function processNext() {
   try {
     await processTx(tx);
     await tx.update({ processed: true });
-    console.log("  -> Done");
+    console.log("  -> DONE!!!!!!!!");
+    console.log(`  -> Hash  : https://bscscan.com/tx/${tx.hash}`);
   } catch (err) {
-    if (err.message === "NO_ERC20_TRANSFER") {
+    if (
+      err.message === "NO_ERC20_TRANSFER" ||
+      err.message === "IGNORED_METHOD" ||
+      err.message === "IGNORED_ADDRESS"
+    ) {
       await tx.update({ processed: true });
       console.log("  -> Bo qua (khong co ERC20 Transfer)");
     } else {

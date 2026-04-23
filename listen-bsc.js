@@ -2,6 +2,7 @@ const { Web3 } = require("web3");
 const sequelize = require("./db");
 const Setting = require("./models/Setting");
 const Transaction = require("./models/Transaction");
+const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
 require("dotenv").config();
@@ -38,16 +39,46 @@ async function processBlock() {
   const ignoredSet = IgnoreAddress.getAll();
   const ignoredMethods = IgnoreMethod.getAll();
 
+  const blockedContracts = await Contract.findAll({
+    where: { isBlock: true },
+    attributes: ["address"],
+  });
+  const blockedSet = new Set(
+    blockedContracts.map((c) => c.address.toLowerCase()),
+  );
+
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();
     const to = tx.to?.toLowerCase();
     const selector = tx.input?.slice(0, 10)?.toLowerCase();
-    return !ignoredSet.has(from) && !ignoredSet.has(to) && !ignoredMethods.has(selector);
+    return (
+      !ignoredSet.has(from) &&
+      !ignoredSet.has(to) &&
+      !ignoredMethods.has(selector) &&
+      !blockedSet.has(to)
+    );
   });
 
-  console.log(`  -> Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`);
+  console.log(
+    `  -> Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`,
+  );
 
   for (const tx of filtered) {
+    if (tx.input.length > 5000) {
+      console.log("  Bo qua tx co input qua lon:", tx.hash);
+      continue;
+    }
+    const selector = tx.input?.slice(0, 10)?.toLowerCase() || null;
+    if (selector && tx.to) {
+      const exists = await Transaction.findOne({
+        where: { selector, to: tx.to.toLowerCase() },
+        attributes: ["id"],
+      });
+      if (exists) {
+        console.log("  Bo qua tx trung selector+to:", tx.hash);
+        continue;
+      }
+    }
     await Transaction.upsert({
       hash: tx.hash,
       blockNumber: Number(nextBlock),
@@ -55,8 +86,17 @@ async function processBlock() {
       to: tx.to || null,
       value: tx.value.toString(),
       input: tx.input,
+      selector,
       type: "bsc",
     });
+    if (tx.to) {
+      const addr = tx.to.toLowerCase();
+      const [contract] = await Contract.findOrCreate({
+        where: { address: addr },
+        defaults: { txCount: 0, url: `https://bscscan.com/address/${addr}` },
+      });
+      await contract.increment("txCount");
+    }
     console.log("  Saved:", tx.hash);
   }
 

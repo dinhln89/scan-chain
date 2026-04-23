@@ -17,6 +17,10 @@ const ReviewTx = sequelize.define(
       type: DataTypes.STRING(42),
       allowNull: false,
     },
+    selector: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
     isCallInput: {
       type: DataTypes.BOOLEAN,
       allowNull: false,

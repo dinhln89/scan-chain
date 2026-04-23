@@ -165,7 +165,15 @@ async function analyzeTx(txHash) {
     isTransferSender = true;
   }
 
-  return { txHash, addresses, calls, transfers, isCallInput, isTransferSender };
+  return {
+    txHash,
+    addresses,
+    calls,
+    transfers,
+    isCallInput,
+    isTransferSender,
+    selector,
+  };
 }
 
 module.exports = {
