@@ -75,6 +75,23 @@ function decodeBalanceOf(output) {
   return BigInt('0x' + output.slice(2)).toString();
 }
 
+function extractAddressesFromInput(input) {
+  if (!input || input.length < 10) return [];
+  const data = input.slice(10); // bo 4 byte selector
+  const addresses = [];
+  for (let i = 0; i + 64 <= data.length; i += 64) {
+    const chunk = data.slice(i, i + 64);
+    // address: 12 byte zero padding + 20 byte address
+    if (chunk.startsWith('000000000000000000000000')) {
+      const addr = '0x' + chunk.slice(24);
+      if (addr !== '0x0000000000000000000000000000000000000000') {
+        addresses.push(addr);
+      }
+    }
+  }
+  return [...new Set(addresses)];
+}
+
 const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 
 function decodeTransfers(logs) {
@@ -90,6 +107,11 @@ function decodeTransfers(logs) {
 
 async function processTx(tx) {
   console.log(`  Hash  : https://bscscan.com/tx/${tx.hash}`);
+
+  const addrs = extractAddressesFromInput(tx.input);
+  console.log(`  Addresses in input: ${addrs.length}`);
+  addrs.forEach((a) => console.log(`    ${a}`));
+
   const trace = await traceCall(tx.hash);
 
   const allCalls = [trace, ...(trace.calls || [])];
