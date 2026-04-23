@@ -41,29 +41,88 @@ async function getLogs(txHash) {
   return json.result?.logs || [];
 }
 
+const SELECTORS = {
+  '0x0902f1ac': 'getReserves()',
+  '0x70a08231': 'balanceOf(address)',
+};
+
+function extractCalls(calls = [], results = []) {
+  for (const call of calls) {
+    const selector = call.input?.slice(0, 10)?.toLowerCase();
+    if (selector && SELECTORS[selector]) {
+      results.push({
+        fn:     SELECTORS[selector],
+        to:     call.to,
+        input:  call.input,
+        output: call.output,
+      });
+    }
+    if (call.calls) extractCalls(call.calls, results);
+  }
+  return results;
+}
+
+function decodeGetReserves(output) {
+  if (!output || output === '0x') return null;
+  const hex = output.slice(2);
+  const reserve0 = BigInt('0x' + hex.slice(0, 64));
+  const reserve1 = BigInt('0x' + hex.slice(64, 128));
+  return { reserve0: reserve0.toString(), reserve1: reserve1.toString() };
+}
+
+function decodeBalanceOf(output) {
+  if (!output || output === '0x') return null;
+  return BigInt('0x' + output.slice(2)).toString();
+}
+
+const TRANSFER_TOPIC = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
+
+function decodeTransfers(logs) {
+  return logs
+    .filter((log) => log.topics[0]?.toLowerCase() === TRANSFER_TOPIC)
+    .map((log) => ({
+      token:  log.address,
+      from:   '0x' + log.topics[1].slice(26),
+      to:     '0x' + log.topics[2].slice(26),
+      amount: BigInt('0x' + log.data.slice(2)).toString(),
+    }));
+}
+
 async function processTx(tx) {
   console.log(`  Hash  : https://bscscan.com/tx/${tx.hash}`);
   const trace = await traceCall(tx.hash);
-  console.log(`  Type  : ${trace.type}`);
-  console.log(`  From  : ${trace.from}`);
-  console.log(`  To    : ${trace.to}`);
-  console.log(`  Gas   : ${trace.gasUsed}`);
 
-  if (trace.calls && trace.calls.length > 0) {
-    console.log(`  Calls : ${trace.calls.length} internal calls`);
-    trace.calls.forEach((call, i) => {
-      console.log(`    [${i}] ${call.type} -> ${call.to} (gas: ${call.gasUsed})`);
-    });
+  const allCalls = [trace, ...(trace.calls || [])];
+  const matched = extractCalls(allCalls);
+
+  if (matched.length === 0) {
+    console.log('  Khong co getReserves / balanceOf');
+    return { trace };
   }
 
-  const logs = await getLogs(tx.hash);
-  console.log(`  Logs  : ${logs.length} events`);
-  logs.forEach((log, i) => {
-    console.log(`    [${i}] address : ${log.address}`);
-    console.log(`         topic[0]: ${log.topics[0]}`);
+  matched.forEach((c, i) => {
+    console.log(`  [${i}] ${c.fn} -> ${c.to}`);
+    if (c.fn === 'getReserves()') {
+      const r = decodeGetReserves(c.output);
+      if (r) console.log(`       reserve0=${r.reserve0}  reserve1=${r.reserve1}`);
+    } else if (c.fn === 'balanceOf(address)') {
+      const wallet = '0x' + c.input.slice(34);
+      const bal = decodeBalanceOf(c.output);
+      console.log(`       wallet=${wallet}  balance=${bal}`);
+    }
   });
 
-  return { trace, logs };
+  const logs = await getLogs(tx.hash);
+  const transfers = decodeTransfers(logs);
+  console.log(`  Transfers: ${transfers.length}`);
+  transfers.forEach((t, i) => {
+    console.log(`    [${i}] token=${t.token}`);
+    console.log(`         from =${t.from}`);
+    console.log(`         to   =${t.to}`);
+    console.log(`         amount=${t.amount}`);
+  });
+
+  return { trace, matched, transfers };
 }
 
 async function processNext() {
