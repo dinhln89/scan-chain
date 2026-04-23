@@ -131,19 +131,23 @@ async function analyzeTx(txHash) {
   return { txHash, addresses, calls, transfers };
 }
 
+let contractSynced = false;
+
 async function isContract(address) {
   const Contract = require("../models/Contract");
   const addr = address.toLowerCase();
 
-  const cached = await Contract.findOne({
-    where: { address: addr },
-    attributes: ["id"],
-  });
+  if (!contractSynced) {
+    await Contract.sync();
+    contractSynced = true;
+  }
+
+  const cached = await Contract.findOne({ where: { address: addr }, attributes: ['id'] });
   if (cached) return true;
 
-  const code = await rpc("eth_getCode", [addr, "latest"]);
-  const result = code && code !== "0x";
-  if (result) await Contract.upsert({ address: addr, type: "bsc" });
+  const code = await rpc('eth_getCode', [addr, 'latest']);
+  const result = code && code !== '0x';
+  if (result) await Contract.upsert({ address: addr, type: 'bsc' });
   return result;
 }
 
