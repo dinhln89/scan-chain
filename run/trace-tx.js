@@ -6,48 +6,33 @@ const { analyzeTx, isContract } = require("../core/trace");
 async function processTx(tx) {
   console.log(`  Hash  : https://bscscan.com/tx/${tx.hash}`);
 
-  const { addresses, calls, transfers } = await analyzeTx(tx.hash);
+  const { addresses, calls, transfers, isCallInput, isTransferSender } =
+    await analyzeTx(tx.hash);
 
   const getReservesAddrs = new Set(
-    calls.filter((c) => c.fn === 'getReserves()').map((c) => c.to?.toLowerCase())
+    calls
+      .filter((c) => c.fn === "getReserves()")
+      .map((c) => c.to?.toLowerCase()),
   );
   const balanceOfAddrs = new Set(
-    calls.filter((c) => c.fn === 'balanceOf(address)').map((c) => c.to?.toLowerCase())
+    calls
+      .filter((c) => c.fn === "balanceOf(address)")
+      .map((c) => c.to?.toLowerCase()),
   );
 
-  const rows = [];
-
-  rows.push({ address: tx.from.toLowerCase(), source: 'sender' });
-
-  for (const addr of addresses) {
-    rows.push({ address: addr.toLowerCase(), source: 'input' });
-  }
-
-  for (const t of transfers) {
-    rows.push({ address: t.from.toLowerCase(),  source: 'transfer' });
-    rows.push({ address: t.to.toLowerCase(),    source: 'transfer' });
-    rows.push({ address: t.token.toLowerCase(), source: 'transfer' });
-  }
-
-  // dedup by address+source, insert
-  const seen = new Set();
-  for (const row of rows) {
-    const key = `${row.address}:${row.source}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    await ReviewTx.upsert({
-      txHash:        tx.hash,
-      address:       row.address,
-      source:        row.source,
-      isGetReserves: getReservesAddrs.has(row.address),
-      isBalanceOf:   balanceOfAddrs.has(row.address),
-    });
-  }
+  await ReviewTx.upsert({
+    txHash: tx.hash,
+    address: tx.to.toLowerCase(),
+    isCallInput: isCallInput,
+    isTransferSender: isTransferSender,
+    isGetReserves: getReservesAddrs.length > 0,
+    isBalanceOf: balanceOfAddrs.length > 0,
+  });
 
   console.log(`  ReviewTx: ${seen.size} records inserted`);
 
   // collect all unique addresses
-  const allAddrs = [...new Set([...seen].map((k) => k.split(':')[0]))];
+  const allAddrs = [...new Set([...seen].map((k) => k.split(":")[0]))];
 
   // check contract in parallel (batch 5)
   let contractCount = 0;
@@ -56,7 +41,7 @@ async function processTx(tx) {
     await Promise.all(
       batch.map(async (addr) => {
         if (await isContract(addr)) contractCount++;
-      })
+      }),
     );
   }
   console.log(`  Contracts: ${contractCount} inserted`);
@@ -77,12 +62,11 @@ async function processNext() {
   try {
     await processTx(tx);
     await tx.update({ processed: true });
-    console.log('  -> Done');
+    console.log("  -> Done");
   } catch (err) {
-    const skip = ['NO_ERC20_TRANSFER', 'IGNORED_METHOD', 'IGNORED_ADDRESS'];
-    if (skip.includes(err.message)) {
+    if (err.message === "NO_ERC20_TRANSFER") {
       await tx.update({ processed: true });
-      console.log(`  -> Bo qua (${err.message})`);
+      console.log("  -> Bo qua (khong co ERC20 Transfer)");
     } else {
       console.error(`  -> Loi: ${err.message}`);
     }

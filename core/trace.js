@@ -2,8 +2,8 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
-const IgnoreAddress = require('./ignore-address');
-const IgnoreMethod  = require('./ignore-method');
+const IgnoreAddress = require("./ignore-address");
+const IgnoreMethod = require("./ignore-method");
 
 const BSC_RPC =
   process.env.BSC_RPC ||
@@ -102,13 +102,15 @@ async function analyzeTx(txHash) {
 
   if (!tx) throw new Error("Khong tim thay tx: " + txHash);
 
-  const ignoredAddrs   = IgnoreAddress.getAll();
+  const ignoredAddrs = IgnoreAddress.getAll();
   const ignoredMethods = IgnoreMethod.getAll();
-  const selector       = tx.input?.slice(0, 10)?.toLowerCase();
+  const selector = tx.input?.slice(0, 10)?.toLowerCase();
 
-  if (ignoredMethods.has(selector)) throw new Error('IGNORED_METHOD');
-  if (ignoredAddrs.has(tx.from?.toLowerCase())) throw new Error('IGNORED_ADDRESS');
-  if (tx.to && ignoredAddrs.has(tx.to.toLowerCase())) throw new Error('IGNORED_ADDRESS');
+  if (ignoredMethods.has(selector)) throw new Error("IGNORED_METHOD");
+  if (ignoredAddrs.has(tx.from?.toLowerCase()))
+    throw new Error("IGNORED_ADDRESS");
+  if (tx.to && ignoredAddrs.has(tx.to.toLowerCase()))
+    throw new Error("IGNORED_ADDRESS");
 
   const addresses = extractAddressesFromInput(tx.input);
   const calls = extractCalls([trace, ...(trace.calls || [])]);
@@ -139,7 +141,21 @@ async function analyzeTx(txHash) {
     }
   });
 
-  return { txHash, addresses, calls, transfers };
+  let isCallInput = false;
+  if (calls.length > 0) {
+    const callAddrs = calls.map((c) => c.to?.toLowerCase());
+    if (callAddrs.includes(sender) || callAddrs.some((a) => inputSet.has(a))) {
+      isCallInput = true;
+    }
+  }
+
+  let isTransferSender = false;
+  const froms = transfers.map((t) => t.from.toLowerCase());
+  if (froms.includes(sender) || froms.some((f) => inputSet.has(f))) {
+    isTransferSender = true;
+  }
+
+  return { txHash, addresses, calls, transfers, isCallInput, isTransferSender };
 }
 
 let contractSynced = false;
@@ -153,12 +169,15 @@ async function isContract(address) {
     contractSynced = true;
   }
 
-  const cached = await Contract.findOne({ where: { address: addr }, attributes: ['id'] });
+  const cached = await Contract.findOne({
+    where: { address: addr },
+    attributes: ["id"],
+  });
   if (cached) return true;
 
-  const code = await rpc('eth_getCode', [addr, 'latest']);
-  const result = code && code !== '0x';
-  if (result) await Contract.upsert({ address: addr, type: 'bsc' });
+  const code = await rpc("eth_getCode", [addr, "latest"]);
+  const result = code && code !== "0x";
+  if (result) await Contract.upsert({ address: addr, type: "bsc" });
   return result;
 }
 
