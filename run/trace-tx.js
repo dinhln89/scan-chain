@@ -12,6 +12,8 @@ async function processTx(tx) {
     isCallInput,
     isTransferSender,
     selector,
+    tokenNames,
+    tokenSymbols,
   } = await analyzeTx(tx.hash);
 
   if (isTransferSender) {
@@ -26,14 +28,17 @@ async function processTx(tx) {
         .map((c) => c.to?.toLowerCase()),
     );
 
-    await ReviewTx.upsert({
-      txHash: tx.hash,
-      address: tx.to.toLowerCase(),
-      selector,
-      isCallInput,
-      isGetReserves: getReservesAddrs.size > 0,
-      isBalanceOf: balanceOfAddrs.size > 0,
-    });
+    // await ReviewTx.upsert({
+    //   txHash: tx.hash,
+    //   address: tx.to.toLowerCase(),
+    //   selector,
+    //   isCallInput,
+    //   isGetReserves: getReservesAddrs.size > 0,
+    //   isBalanceOf: balanceOfAddrs.size > 0,
+    // });
+
+    const tokenNameList = Object.values(tokenNames).filter(Boolean).join(", ");
+    const tokenSymbolList = Object.values(tokenSymbols).filter(Boolean).join(", ");
 
     await append([
       [
@@ -45,6 +50,8 @@ async function processTx(tx) {
         balanceOfAddrs.size > 0 ? "YES" : "NO",
         tx.blockNumber,
         selector ?? "",
+        tokenNameList,
+        tokenSymbolList,
       ],
     ]);
   }

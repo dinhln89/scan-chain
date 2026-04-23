@@ -15,6 +15,8 @@ const ignoreSwap = {
     "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
   "0x5c11d795":
     "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  "0xe8e33700":
+    "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
 };
 
 const BSC_RPC =
@@ -105,6 +107,31 @@ function decodeTransfers(logs) {
     }));
 }
 
+async function decodeErc20String(tokenAddress, selector) {
+  try {
+    const result = await rpc("eth_call", [
+      { to: tokenAddress, data: selector },
+      "latest",
+    ]);
+    if (!result || result === "0x") return null;
+    const hex = result.slice(2);
+    const offset = parseInt(hex.slice(0, 64), 16) * 2;
+    const length = parseInt(hex.slice(offset, offset + 64), 16) * 2;
+    const strHex = hex.slice(offset + 64, offset + 64 + length);
+    return Buffer.from(strHex, "hex").toString("utf8");
+  } catch {
+    return null;
+  }
+}
+
+async function getErc20Name(tokenAddress) {
+  return decodeErc20String(tokenAddress, "0x06fdde03");
+}
+
+async function getErc20Symbol(tokenAddress) {
+  return decodeErc20String(tokenAddress, "0x95d89b41");
+}
+
 async function analyzeTx(txHash) {
   const receipt = await rpc("eth_getTransactionReceipt", [txHash]);
   const transfers = decodeTransfers(receipt?.logs || []);
@@ -143,6 +170,25 @@ async function analyzeTx(txHash) {
   ];
   if (matchedTos.length === 0) throw new Error("NO_ERC20_TRANSFER");
 
+  const tokensSentToSender = [
+    ...new Set(
+      transfers
+        .filter((t) => t.to.toLowerCase() === sender)
+        .map((t) => t.token.toLowerCase()),
+    ),
+  ];
+  const [tokenNames, tokenSymbols] = await Promise.all([
+    Promise.all(
+      tokensSentToSender.map(async (addr) => [addr, await getErc20Name(addr)]),
+    ).then(Object.fromEntries),
+    Promise.all(
+      tokensSentToSender.map(async (addr) => [
+        addr,
+        await getErc20Symbol(addr),
+      ]),
+    ).then(Object.fromEntries),
+  ]);
+
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
     if (c.fn === "balanceOf(address)") {
@@ -173,6 +219,8 @@ async function analyzeTx(txHash) {
     isCallInput,
     isTransferSender,
     selector,
+    tokenNames,
+    tokenSymbols,
   };
 }
 
@@ -181,5 +229,7 @@ module.exports = {
   extractAddressesFromInput,
   extractCalls,
   decodeTransfers,
+  getErc20Name,
+  getErc20Symbol,
   rpc,
 };
