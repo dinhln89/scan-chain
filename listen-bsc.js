@@ -2,7 +2,7 @@ const { Web3 } = require("web3");
 const sequelize = require("./db");
 const Setting = require("./models/Setting");
 const Transaction = require("./models/Transaction");
-const IgnoreAddress = require("./models/IgnoreAddress");
+const { getAll: getIgnored } = require("./core/ignore-address");
 require("dotenv").config();
 
 const BSC_RPC =
@@ -34,8 +34,7 @@ async function processBlock() {
 
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
-  const ignored = await IgnoreAddress.findAll({ attributes: ["address"] });
-  const ignoredSet = new Set(ignored.map((r) => r.address.toLowerCase()));
+  const ignoredSet = getIgnored();
 
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();
