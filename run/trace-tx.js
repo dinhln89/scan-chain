@@ -40,6 +40,7 @@ async function processTx(tx) {
       .filter(Boolean)
       .join(", ");
 
+    const now = new Date();
     await append([
       [
         tx.hash,
@@ -51,6 +52,7 @@ async function processTx(tx) {
         balanceOfAddrs.size > 0 ? "YES" : "",
         selector ?? "",
         tx.blockNumber,
+        now.toLocaleString(),
       ],
     ]);
   }
