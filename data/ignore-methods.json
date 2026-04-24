@@ -14,5 +14,7 @@
   "0x7ff36ab5": "",
   "0x414bf389": "",
   "0xdb3e2198": "exactOutputSingle",
-  "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)"
+  "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+  "0xc04b8d59": "exactInput",
+  "0x5f575529": "swap(string,address,uint256,uint256,address,uint256)"
 }

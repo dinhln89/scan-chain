@@ -36,7 +36,9 @@ async function processTx(tx) {
     //   isBalanceOf: balanceOfAddrs.size > 0,
     // });
 
-    const tokenSymbolList = Object.values(tokenSymbols).filter(Boolean).join(", ");
+    const tokenSymbolList = Object.values(tokenSymbols)
+      .filter(Boolean)
+      .join(", ");
 
     await append([
       [
@@ -44,11 +46,11 @@ async function processTx(tx) {
         `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
         `https://bscscan.com/tx/${tx.hash}`,
         isCallInput ? "YES" : "NO",
-        getReservesAddrs.size > 0 ? "YES" : "NO",
-        balanceOfAddrs.size > 0 ? "YES" : "NO",
-        tx.blockNumber,
-        selector ?? "",
+        getReservesAddrs.size > 0 ? "YES" : "",
+        balanceOfAddrs.size > 0 ? "YES" : "",
         tokenSymbolList,
+        selector ?? "",
+        tx.blockNumber,
       ],
     ]);
   }
