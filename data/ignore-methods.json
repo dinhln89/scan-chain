@@ -21,5 +21,6 @@
   "0x8803dbee": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
   "0x27772d13": "",
   "0x0723b02f": "batchTransferToken",
-  "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)"
+  "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
+  "0x34fcd5be": "executeBatch"
 }
