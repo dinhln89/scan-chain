@@ -1,0 +1,20 @@
+{
+    "apps": [
+        {
+            "name": "listen-bsc",
+            "script": "node listen-bsc.js",
+            "instances": 1,
+            "autorestart": true,
+            "max_memory_restart": "1G",
+            "cron_restart": "*/44 * * * *"
+        },
+        {
+            "name": "trace-tx",
+            "script": "node run/trace-tx.js",
+            "instances": 1,
+            "autorestart": true,
+            "max_memory_restart": "1G",
+            "cron_restart": "*/45 * * * *"
+        }
+    ]
+}
