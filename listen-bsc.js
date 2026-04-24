@@ -75,7 +75,6 @@ async function processBlock() {
         attributes: ["id"],
       });
       if (exists) {
-        console.log("  Bo qua tx trung selector+to:", tx.hash);
         continue;
       }
     }
