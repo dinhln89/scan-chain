@@ -16,5 +16,9 @@
   "0xdb3e2198": "exactOutputSingle",
   "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
   "0xc04b8d59": "exactInput",
-  "0x5f575529": "swap(string,address,uint256,uint256,address,uint256)"
+  "0x5f575529": "swap(string,address,uint256,uint256,address,uint256)",
+  "0xf2c42696": "dagSwapByOrderId",
+  "0x8803dbee": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+  "0x27772d13": "",
+  "0x0723b02f": "batchTransferToken"
 }
