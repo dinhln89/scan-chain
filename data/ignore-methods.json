@@ -12,5 +12,7 @@
   "0x5c11d795": "",
   "0x38ed1739": "",
   "0x7ff36ab5": "",
-  "0x414bf389": ""
+  "0x414bf389": "",
+  "0xdb3e2198": "exactOutputSingle",
+  "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)"
 }

@@ -15,8 +15,6 @@ const ignoreSwap = {
     "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
   "0x5c11d795":
     "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0xe8e33700":
-    "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
 };
 
 const BSC_RPC =
