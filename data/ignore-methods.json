@@ -20,5 +20,6 @@
   "0xf2c42696": "dagSwapByOrderId",
   "0x8803dbee": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
   "0x27772d13": "",
-  "0x0723b02f": "batchTransferToken"
+  "0x0723b02f": "batchTransferToken",
+  "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)"
 }
