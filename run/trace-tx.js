@@ -91,7 +91,7 @@ async function processNext() {
 
 async function main() {
   await sequelize.ensureDatabase();
-  await sequelize.sync({ alter: true });
+  await sequelize.sync();
   console.log("Bat dau xu ly transactions...");
 
   const loop = async () => {

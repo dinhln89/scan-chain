@@ -12,7 +12,6 @@ const Transaction = sequelize.define(
     hash: {
       type: DataTypes.STRING(66),
       allowNull: false,
-      unique: true,
     },
     blockNumber: {
       type: DataTypes.BIGINT,
