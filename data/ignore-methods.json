@@ -22,5 +22,15 @@
   "0x27772d13": "",
   "0x0723b02f": "batchTransferToken",
   "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
-  "0x34fcd5be": "executeBatch"
+  "0x34fcd5be": "executeBatch",
+  "0xe4a974cc": "expressExecuteWithToken",
+  "0x00000000": "fulfillBasicOrder_efficient_6GL6yc",
+  "0x00f714ce": "withdraw(uint256 _amount,address _receiver)",
+  "0x60fc8466": "multicall",
+  "0xf06a07a0": "exitPostExpToToken",
+  "0xe9ae5c53": "",
+  "0x9265bb9d": "",
+  "0x022c0d9f": "swap",
+  "0x0502b1c5": "unoswap",
+  "0x08af27de": "transfer"
 }
