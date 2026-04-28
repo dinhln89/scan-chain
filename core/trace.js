@@ -16,6 +16,8 @@ const ignoreSwap = {
   "0x5c11d795":
     "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
   "0xf2c42696": "dagSwapByOrderId(uint256,uint256,uint256,address,uint256)",
+  "0xfc1c1b21":
+    "borrowTokenFromCollateral(uint256,uint256,uint256,address,uint256)",
 };
 
 const BSC_RPC =
