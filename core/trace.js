@@ -18,7 +18,7 @@ const ignoreSwap = {
   "0xf2c42696": "dagSwapByOrderId(uint256,uint256,uint256,address,uint256)",
   "0xfc1c1b21": "borrowTokenFromCollateral",
   "0x128acb08": "swap",
-  
+  "0xfa461e33": "uniswapV3SwapCallback",
 };
 
 const BSC_RPC =
