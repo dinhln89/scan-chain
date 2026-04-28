@@ -94,13 +94,18 @@ function decodeBalanceOf(output) {
 
 function decodeTransfers(logs) {
   return logs
-    .filter((log) => log.topics[0]?.toLowerCase() === TRANSFER_TOPIC)
+    .filter(
+      (log) =>
+        log.topics[0]?.toLowerCase() === TRANSFER_TOPIC &&
+        log.topics[1] &&
+        log.topics[2],
+    )
     .map((log) => ({
       token: log.address,
       from: "0x" + log.topics[1].slice(26),
       to: "0x" + log.topics[2].slice(26),
       amount: BigInt(
-        "0x" + (log.data === "0x" ? "0" : log.data.slice(2)),
+        "0x" + (!log.data || log.data === "0x" ? "0" : log.data.slice(2)),
       ).toString(),
     }));
 }
@@ -182,7 +187,7 @@ async function analyzeTx(txHash) {
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
     if (c.fn === "balanceOf(address)") {
-      c.wallet = "0x" + c.input.slice(34);
+      c.wallet = c.input?.length >= 34 ? "0x" + c.input.slice(34) : null;
       c.decoded = decodeBalanceOf(c.output);
     }
   });
