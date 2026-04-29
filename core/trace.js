@@ -19,6 +19,7 @@ const ignoreSwap = {
   "0xfc1c1b21": "borrowTokenFromCollateral",
   "0x128acb08": "swap",
   "0xfa461e33": "uniswapV3SwapCallback",
+  "0x022c0d9f": "",
 };
 
 const BSC_RPC =
