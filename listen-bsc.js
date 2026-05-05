@@ -5,6 +5,7 @@ const Transaction = require("./models/Transaction");
 const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
+const { sendMessage } = require("./core/telegram");
 require("dotenv").config();
 
 const BSC_RPC =
@@ -115,6 +116,7 @@ async function main() {
       await processBlock();
     } catch (err) {
       console.error("Loi:", err.message);
+      await sendMessage(`<b>listen-bsc error</b>\n${err.message}`);
     }
     setTimeout(loop, 100);
   };
