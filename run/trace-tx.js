@@ -3,6 +3,7 @@ const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx } = require("../core/trace");
 const { append } = require("../core/sheets");
+const { sendMessage } = require("../core/telegram");
 
 async function processTx(tx) {
   const {
@@ -85,6 +86,9 @@ async function processNext() {
       console.log("  -> Bo qua (khong co ERC20 Transfer)");
     } else {
       console.error(`  -> Loi: ${err.message}`);
+      await sendMessage(
+        `<b>trace-tx error</b>\nHash: <code>${tx.hash}</code>\n${err.message}`,
+      );
     }
   }
 }
