@@ -2,7 +2,7 @@
     "apps": [
         {
             "name": "listen-bsc",
-            "script": "./pull.sh && cp .env.bk .env && node listen-bsc.js",
+            "script": "./pull.sh && node listen-bsc.js",
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "1G",
