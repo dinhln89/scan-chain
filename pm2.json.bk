@@ -10,7 +10,7 @@
         },
         {
             "name": "trace-tx",
-            "script": "node run/trace-tx.js",
+            "script": "./pull.sh && node run/trace-tx.js",
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "1G",
