@@ -6,6 +6,7 @@ const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
 const { sendMessage } = require("./core/telegram");
+const { hasDumpData } = require("./core/trace");
 require("dotenv").config();
 
 const BSC_RPC =
