@@ -6,7 +6,6 @@ const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
 const { sendMessage } = require("./core/telegram");
-const { hasDumpData } = require("./core/trace");
 require("dotenv").config();
 
 const BSC_RPC =
@@ -69,12 +68,6 @@ async function processBlock() {
   for (const tx of filtered) {
     if (tx.input.length > 5000) {
       console.log("  Bo qua tx co input qua lon:", tx.hash);
-      continue;
-    }
-
-    const hasDump = hasDumpData(tx.input);
-    if (hasDump) {
-      console.log(`  Bo qua ${tx.hash} vi co dump data`);
       continue;
     }
 
