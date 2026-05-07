@@ -83,6 +83,19 @@ function extractAddressesFromInput(input) {
   return [...new Set(addresses)];
 }
 
+function hasDumpData(input) {
+  if (!input || input.length < 10) return [];
+  const data = input.slice(10);
+  let hasDump = false;
+  for (let i = 0; i + 64 <= data.length; i += 64) {
+    const chunk = data.slice(i, i + 64).toLowerCase();
+    if (!chunk.startsWith("0000000")) {
+      hasDump = true;
+    }
+  }
+  return hasDump;
+}
+
 function decodeGetReserves(output) {
   if (!output || output === "0x") return null;
   const hex = output.slice(2);
@@ -162,6 +175,9 @@ async function analyzeTx(txHash) {
   if (tx.to && ignoredAddrs.has(tx.to.toLowerCase()))
     throw new Error("IGNORED_ADDRESS");
 
+  const hasDump = hasDumpData(tx.input);
+  if (hasDump) throw new Error("HAS_DUMP_DATA");
+
   const addresses = extractAddressesFromInput(tx.input);
   const calls = extractCalls([trace, ...(trace.calls || [])]);
 
@@ -231,4 +247,5 @@ module.exports = {
   getErc20Name,
   getErc20Symbol,
   rpc,
+  hasDumpData,
 };

@@ -52,6 +52,7 @@ async function processBlock() {
     const from = tx.from?.toLowerCase();
     const to = tx.to?.toLowerCase();
     const selector = tx.input?.slice(0, 10)?.toLowerCase();
+
     return (
       !ignoredSet.has(from) &&
       !ignoredSet.has(to) &&
@@ -69,6 +70,13 @@ async function processBlock() {
       console.log("  Bo qua tx co input qua lon:", tx.hash);
       continue;
     }
+
+    const hasDump = hasDumpData(tx.input);
+    if (hasDump) {
+      console.log(`  Bo qua ${tx.hash} vi co dump data`);
+      continue;
+    }
+
     const selector = tx.input?.slice(0, 10)?.toLowerCase() || null;
     if (selector && tx.to) {
       const exists = await Transaction.findOne({
