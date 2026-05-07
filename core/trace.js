@@ -78,7 +78,6 @@ function extractAddressesFromInput(input) {
   const addresses = [];
   for (let i = 0; i + 64 <= data.length; i += 64) {
     const chunk = data.slice(i, i + 64).toLowerCase();
-    console.log(chunk);
     if (isLikelyAddress(chunk)) addresses.push("0x" + chunk.slice(24));
   }
   return [...new Set(addresses)];
