@@ -28,9 +28,12 @@ function createLogger(name, { console: withConsole = false } = {}) {
     }),
   ];
 
-  if (withConsole) {
-    transports.push(new winston.transports.Console({ format: consoleFormat }));
-  }
+  transports.push(
+    new winston.transports.Console({
+      level: withConsole ? "info" : "error",
+      format: consoleFormat,
+    })
+  );
 
   return winston.createLogger({ transports });
 }
