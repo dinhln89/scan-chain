@@ -2,9 +2,6 @@ const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const { Op } = require("sequelize");
 const readline = require("readline");
-const { createLogger } = require("../core/logger");
-
-const log = createLogger("terminal", { console: true });
 
 async function main() {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -17,7 +14,7 @@ async function main() {
   });
 
   if (isNaN(threshold)) {
-    log.error("Giá trị không hợp lệ.");
+    console.error("Giá trị không hợp lệ.");
     process.exit(1);
   }
 
@@ -29,11 +26,11 @@ async function main() {
     { where: { txCount: { [Op.gt]: threshold }, isBlock: false } },
   );
 
-  log.info(`Đã block ${count} contract có txCount > ${threshold}.`);
+  console.log(`Đã block ${count} contract có txCount > ${threshold}.`);
   process.exit(0);
 }
 
 main().catch((err) => {
-  log.error(err.message);
+  console.error(err.message);
   process.exit(1);
 });

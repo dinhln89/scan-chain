@@ -1,7 +1,4 @@
 const https = require("https");
-const { createLogger } = require("../core/logger");
-
-const log = createLogger("terminal", { console: true });
 
 const SPREADSHEET_ID = "1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs";
 const GID = process.argv[2] || "0";
@@ -58,15 +55,15 @@ function findDuplicates(addresses) {
 }
 
 async function main() {
-  log.info(`Fetching gid=${GID}...`);
+  console.log(`Fetching gid=${GID}...`);
   const csv = await fetchUrl(SHEET_URL);
   const lines = csv.split("\n").filter((l) => l.trim());
 
   const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/"/g, ""));
   const addrCol = headers.findIndex((h) => h === "address");
   if (addrCol === -1) {
-    log.error("Khong tim thay column 'Address' trong sheet.");
-    log.info(`Headers hien tai: ${headers.join(", ")}`);
+    console.error("Khong tim thay column 'Address' trong sheet.");
+    console.log("Headers hien tai:", headers.join(", "));
     process.exit(1);
   }
 
@@ -78,19 +75,19 @@ async function main() {
     if (addr) addresses.push(addr);
   }
 
-  log.info(`Tong so dong co dia chi: ${addresses.length}`);
+  console.log(`Tong so dong co dia chi: ${addresses.length}`);
 
   const dups = findDuplicates(addresses);
 
   if (dups.length === 0) {
-    log.info("Khong co dia chi trung lap.");
+    console.log("Khong co dia chi trung lap.");
     return;
   }
 
-  log.info(`Tim thay ${dups.length} dia chi trung lap:`);
+  console.log(`\nTim thay ${dups.length} dia chi trung lap:\n`);
   for (const [addr, n] of dups) {
-    log.info(`  ${addr}  (${n} lan)`);
+    console.log(`  ${addr}  (${n} lan)`);
   }
 }
 
-main().catch((err) => log.error(err.message));
+main().catch(console.error);
