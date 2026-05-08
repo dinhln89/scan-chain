@@ -26,15 +26,12 @@ async function main() {
 
   const qi = sequelize.getQueryInterface();
 
-  done = withTimer('[2/4] Kiểm tra và xóa index cũ...');
   const indexes = await qi.showIndex('transactions');
-  const oldIndex = indexes.find(i =>
-    i.fields.length === 1 && i.fields[0].attribute === 'processed'
-  );
-  if (oldIndex) {
-    await qi.removeIndex('transactions', oldIndex.name);
-  }
-  done();
+  console.log(`\nDanh sách ${indexes.length} indexes hiện tại:`);
+  indexes.forEach(i => {
+    const cols = i.fields.map(f => f.attribute).join(', ');
+    console.log(`  - ${i.name} (${cols})`);
+  });
 
   done = withTimer('[3/4] Tạo index mới...');
   await qi.addIndex('transactions', {
