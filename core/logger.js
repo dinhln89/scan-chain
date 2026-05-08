@@ -16,15 +16,23 @@ const consoleFormat = combine(
 );
 
 function createLogger(name, { console: withConsole = false } = {}) {
+  const MAX_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
+
   const transports = [
     new winston.transports.File({
       filename: path.join(__dirname, `../logs/${name}.log`),
       format: fileFormat,
+      maxsize: MAX_SIZE,
+      maxFiles: 3,
+      tailable: true,
     }),
     new winston.transports.File({
       filename: path.join(__dirname, `../logs/error.log`),
       level: "error",
       format: fileFormat,
+      maxsize: MAX_SIZE,
+      maxFiles: 3,
+      tailable: true,
     }),
   ];
 
