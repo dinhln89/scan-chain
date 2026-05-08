@@ -55,7 +55,7 @@ const Transaction = sequelize.define(
       { unique: true, fields: ["hash"] },
       { fields: ["from"] },
       { fields: ["to"] },
-      { fields: ["processed"] },
+      { fields: ["processed", "blockNumber", "id"] },
       { fields: ["selector", "to"] },
     ],
   },
