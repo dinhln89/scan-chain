@@ -26,8 +26,14 @@ async function main() {
 
   const qi = sequelize.getQueryInterface();
 
-  done = withTimer('[2/4] Xóa index cũ...');
-  await qi.removeIndex('transactions', 'transactions_processed');
+  done = withTimer('[2/4] Kiểm tra và xóa index cũ...');
+  const indexes = await qi.showIndex('transactions');
+  const oldIndex = indexes.find(i =>
+    i.fields.length === 1 && i.fields[0].attribute === 'processed'
+  );
+  if (oldIndex) {
+    await qi.removeIndex('transactions', oldIndex.name);
+  }
   done();
 
   done = withTimer('[3/4] Tạo index mới...');
