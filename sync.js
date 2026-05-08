@@ -27,18 +27,30 @@ async function main() {
   const qi = sequelize.getQueryInterface();
 
   const indexes = await qi.showIndex('transactions');
-  console.log(`\nDanh sách ${indexes.length} indexes hiện tại:`);
-  indexes.forEach(i => {
-    const cols = i.fields.map(f => f.attribute).join(', ');
-    console.log(`  - ${i.name} (${cols})`);
-  });
+  const duplicates = indexes.filter(i =>
+    i.fields.length === 1 &&
+    i.fields[0].attribute === 'hash' &&
+    i.name !== 'transactions_hash'
+  );
+  console.log(`\nTìm thấy ${duplicates.length} index hash trùng lặp cần xóa`);
 
-  done = withTimer('[3/4] Tạo index mới...');
-  await qi.addIndex('transactions', {
-    fields: ['processed', 'blockNumber', 'id'],
-    name: 'transactions_processed_block_number_id',
-  });
+  done = withTimer('[2/4] Xóa index trùng lặp...');
+  for (const idx of duplicates) {
+    await qi.removeIndex('transactions', idx.name);
+  }
   done();
+
+  const newIndexExists = indexes.some(i => i.name === 'transactions_processed_block_number_id');
+  if (!newIndexExists) {
+    done = withTimer('[3/4] Tạo index mới...');
+    await qi.addIndex('transactions', {
+      fields: ['processed', 'blockNumber', 'id'],
+      name: 'transactions_processed_block_number_id',
+    });
+    done();
+  } else {
+    console.log('[3/4] Index transactions_processed_block_number_id đã tồn tại, bỏ qua')
+  }
 
   console.log('Hoàn tất!');
   process.exit(0);
