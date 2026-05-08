@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { createLogger } = require('./logger');
+
+const log = createLogger('app');
 
 const FILE = path.resolve(__dirname, '../data/ignore-methods.json');
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1198058145';
@@ -72,9 +75,9 @@ const IgnoreMethod = {
     }
     if (added > 0) {
       save(data);
-      console.log(`[IgnoreMethod] Synced ${added} new entries from sheet`);
+      log.info(`[IgnoreMethod] Synced ${added} new entries from sheet`);
     } else {
-      console.log('[IgnoreMethod] Sheet sync: no new entries');
+      log.info('[IgnoreMethod] Sheet sync: no new entries');
     }
   },
 

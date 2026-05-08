@@ -1,6 +1,9 @@
 const fs = require('fs');
 const path = require('path');
 const https = require('https');
+const { createLogger } = require('./logger');
+
+const log = createLogger('app');
 
 const FILE = path.resolve(__dirname, '../data/ignore-addresses.json');
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1982385575';
@@ -59,9 +62,9 @@ const IgnoreAddress = {
     }
     if (added > 0) {
       save(list);
-      console.log(`[IgnoreAddress] Synced ${added} new entries from sheet`);
+      log.info(`[IgnoreAddress] Synced ${added} new entries from sheet`);
     } else {
-      console.log('[IgnoreAddress] Sheet sync: no new entries');
+      log.info('[IgnoreAddress] Sheet sync: no new entries');
     }
   },
 

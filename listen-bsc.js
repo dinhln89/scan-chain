@@ -6,7 +6,10 @@ const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
 const { sendMessage } = require("./core/telegram");
+const { createLogger } = require("./core/logger");
 require("dotenv").config();
+
+const log = createLogger("listen-bsc");
 
 const BSC_RPC =
   process.env.BSC_RPC ||
@@ -19,10 +22,7 @@ async function processBlock() {
   const stored = await Setting.get("latest_block");
   if (!stored) {
     await Setting.set("latest_block", chainBlock.toString());
-    console.log(
-      "Chua co latest_block, luu block moi nhat:",
-      chainBlock.toString(),
-    );
+    log.info(`Chua co latest_block, luu block moi nhat: ${chainBlock}`);
     return;
   }
 
@@ -33,7 +33,7 @@ async function processBlock() {
   const nextBlock = savedBlock + 1n;
   const block = await web3.eth.getBlock(nextBlock, true);
   const txHashes = block.transactions;
-  console.log(`Block ${nextBlock}: ${txHashes.length} tx`);
+  log.info(`Block ${nextBlock}: ${txHashes.length} tx`);
 
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
@@ -61,13 +61,11 @@ async function processBlock() {
     );
   });
 
-  console.log(
-    `  -> Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`,
-  );
+  log.info(`Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`);
 
   for (const tx of filtered) {
     if (tx.input.length > 5000) {
-      console.log("  Bo qua tx co input qua lon:", tx.hash);
+      log.info(`Bo qua tx co input qua lon: ${tx.hash}`);
       continue;
     }
 
@@ -99,11 +97,11 @@ async function processBlock() {
       });
       await contract.increment("txCount");
     }
-    console.log("  Saved:", tx.hash);
+    log.info(`Saved: ${tx.hash}`);
   }
 
   await Setting.set("latest_block", nextBlock.toString());
-  console.log("Cap nhat len:", nextBlock.toString());
+  log.info(`Cap nhat len: ${nextBlock}`);
 }
 
 async function main() {
@@ -111,13 +109,13 @@ async function main() {
   await sequelize.sync();
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
-  console.log("Bat dau lang nghe BSC...");
+  log.info("Bat dau lang nghe BSC...");
 
   const loop = async () => {
     try {
       await processBlock();
     } catch (err) {
-      console.error("Loi:", err.message);
+      log.error(`Loi: ${err.message}`);
       await sendMessage(`<b>listen-bsc error</b>\n${err.message}`);
     }
     setTimeout(loop, 100);
@@ -126,4 +124,4 @@ async function main() {
   loop();
 }
 
-main().catch(console.error);
+main().catch((err) => log.error(err.message));

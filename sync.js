@@ -1,4 +1,7 @@
 const sequelize = require('./db');
+const { createLogger } = require('./core/logger');
+
+const log = createLogger('sync', { console: false });
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -14,6 +17,7 @@ function withTimer(label) {
     clearInterval(interval);
     const secs = ((Date.now() - start) / 1000).toFixed(1);
     process.stdout.write(`\r✓ ${label} ${secs}s\n`);
+    log.info(`${label} ${secs}s`);
   };
 }
 
@@ -32,7 +36,8 @@ async function main() {
     i.fields[0].attribute === 'hash' &&
     i.name !== 'transactions_hash'
   );
-  console.log(`\nTìm thấy ${duplicates.length} index hash trùng lặp cần xóa`);
+  process.stdout.write(`\nTìm thấy ${duplicates.length} index hash trùng lặp cần xóa\n`);
+  log.info(`Tim thay ${duplicates.length} index hash trung lap can xoa`);
 
   done = withTimer('[2/4] Xóa index trùng lặp...');
   for (const idx of duplicates) {
@@ -49,11 +54,17 @@ async function main() {
     });
     done();
   } else {
-    console.log('[3/4] Index transactions_processed_block_number_id đã tồn tại, bỏ qua')
+    process.stdout.write('[3/4] Index transactions_processed_block_number_id đã tồn tại, bỏ qua\n');
+    log.info('Index transactions_processed_block_number_id da ton tai, bo qua');
   }
 
-  console.log('Hoàn tất!');
+  process.stdout.write('Hoàn tất!\n');
+  log.info('Hoan tat');
   process.exit(0);
 }
 
-main().catch(err => { console.error('Lỗi:', err.message); process.exit(1); });
+main().catch(err => {
+  process.stderr.write(`Lỗi: ${err.message}\n`);
+  log.error(`Loi: ${err.message}`);
+  process.exit(1);
+});

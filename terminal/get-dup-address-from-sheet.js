@@ -1,4 +1,7 @@
 const https = require("https");
+const { createLogger } = require("../core/logger");
+
+const log = createLogger("terminal", { console: true });
 
 const SPREADSHEET_ID = "1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs";
 const GID = process.argv[2] || "0";
@@ -21,7 +24,6 @@ function fetchUrl(url) {
   });
 }
 
-// Parse CSV đơn giản, xử lý field có dấu phẩy trong ngoặc kép
 function parseCSVLine(line) {
   const fields = [];
   let cur = "";
@@ -41,7 +43,6 @@ function parseCSVLine(line) {
 }
 
 function extractAddress(value) {
-  // Trường hợp là URL bscscan: https://bscscan.com/address/0x...
   const m = value.match(/0x[0-9a-fA-F]{40}/);
   return m ? m[0].toLowerCase() : null;
 }
@@ -57,16 +58,15 @@ function findDuplicates(addresses) {
 }
 
 async function main() {
-  console.log(`Fetching gid=${GID}...`);
+  log.info(`Fetching gid=${GID}...`);
   const csv = await fetchUrl(SHEET_URL);
   const lines = csv.split("\n").filter((l) => l.trim());
 
-  // Tìm index của column "Address"
   const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase().replace(/"/g, ""));
   const addrCol = headers.findIndex((h) => h === "address");
   if (addrCol === -1) {
-    console.error("Khong tim thay column 'Address' trong sheet.");
-    console.log("Headers hien tai:", headers.join(", "));
+    log.error("Khong tim thay column 'Address' trong sheet.");
+    log.info(`Headers hien tai: ${headers.join(", ")}`);
     process.exit(1);
   }
 
@@ -78,19 +78,19 @@ async function main() {
     if (addr) addresses.push(addr);
   }
 
-  console.log(`Tong so dong co dia chi: ${addresses.length}`);
+  log.info(`Tong so dong co dia chi: ${addresses.length}`);
 
   const dups = findDuplicates(addresses);
 
   if (dups.length === 0) {
-    console.log("Khong co dia chi trung lap.");
+    log.info("Khong co dia chi trung lap.");
     return;
   }
 
-  console.log(`\nTim thay ${dups.length} dia chi trung lap:\n`);
+  log.info(`Tim thay ${dups.length} dia chi trung lap:`);
   for (const [addr, n] of dups) {
-    console.log(`  ${addr}  (${n} lan)`);
+    log.info(`  ${addr}  (${n} lan)`);
   }
 }
 
-main().catch(console.error);
+main().catch((err) => log.error(err.message));

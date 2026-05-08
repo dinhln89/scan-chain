@@ -1,4 +1,7 @@
 const { Web3 } = require("web3");
+const { createLogger } = require("./core/logger");
+
+const log = createLogger("terminal", { console: true });
 
 const BSC_RPC =
   process.env.BSC_RPC ||
@@ -6,7 +9,6 @@ const BSC_RPC =
 
 const web3 = new Web3(BSC_RPC);
 
-// Map các custom error selector phổ biến
 const KNOWN_ERRORS = {
   "0x08c379a0": "Error(string)",
   "0x4e487b71": "Panic(uint256)",
@@ -23,7 +25,6 @@ function decodeRevertReason(returnData) {
     const label = KNOWN_ERRORS[selector];
 
     if (selector === "0x08c379a0") {
-      // Error(string)
       try {
         const decoded = web3.eth.abi.decodeParameter(
           "string",
@@ -36,7 +37,6 @@ function decodeRevertReason(returnData) {
     }
 
     if (selector === "0x4e487b71") {
-      // Panic(uint256)
       const code = BigInt("0x" + returnData.slice(10)).toString();
       return `${label}: code=${code}`;
     }
@@ -53,18 +53,17 @@ async function main() {
   const inputData =
     "0xc4d66de80000000000000000000000002d2a87bc0652072dae6a4dcb45bc1ced4546b174";
 
-  console.log("From:", from);
-  console.log("To  :", to);
-  console.log("Data:", inputData);
-  console.log();
+  log.info(`From: ${from}`);
+  log.info(`To  : ${to}`);
+  log.info(`Data: ${inputData}`);
 
   try {
     const result = await web3.eth.call({ from, to, data: inputData });
-    console.log("Result (raw):", result);
+    log.info(`Result (raw): ${result}`);
   } catch (err) {
     const returnData = err?.cause?.data;
-    console.error("eth_call reverted:", decodeRevertReason(returnData));
+    log.error(`eth_call reverted: ${decodeRevertReason(returnData)}`);
   }
 }
 
-main().catch(console.error);
+main().catch((err) => log.error(err.message));

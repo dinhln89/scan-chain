@@ -4,6 +4,9 @@ const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { sendMessage } = require("../core/telegram");
+const { createLogger } = require("../core/logger");
+
+const log = createLogger("trace-tx");
 
 async function processTx(tx) {
   const {
@@ -70,12 +73,11 @@ async function processNext() {
 
   if (!tx) return;
 
-  console.log(`\nXu ly tx: ${tx.hash}`);
+  log.info(`Xu ly tx: ${tx.hash}`);
   try {
     await processTx(tx);
     await tx.update({ processed: true });
-    console.log("  -> DONE!!!!!!!!");
-    console.log(`  -> Hash  : https://bscscan.com/tx/${tx.hash}`);
+    log.info(`DONE: https://bscscan.com/tx/${tx.hash}`);
   } catch (err) {
     if (
       err.message === "NO_ERC20_TRANSFER" ||
@@ -83,9 +85,9 @@ async function processNext() {
       err.message === "IGNORED_ADDRESS"
     ) {
       await tx.update({ processed: true });
-      console.log("  -> Bo qua (khong co ERC20 Transfer)");
+      log.info(`Bo qua tx ${tx.hash}: ${err.message}`);
     } else {
-      console.error(`  -> Loi: ${err.message}`);
+      log.error(`Loi tx ${tx.hash}: ${err.message}`);
       await sendMessage(
         `<b>trace-tx error</b>\nHash: <code>${tx.hash}</code>\n${err.message}`,
       );
@@ -96,13 +98,13 @@ async function processNext() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
-  console.log("Bat dau xu ly transactions...");
+  log.info("Bat dau xu ly transactions...");
 
   const loop = async () => {
     try {
       await processNext();
     } catch (err) {
-      console.error("Loi:", err.message);
+      log.error(`Loi: ${err.message}`);
     }
     setTimeout(loop, 100);
   };
@@ -110,4 +112,4 @@ async function main() {
   loop();
 }
 
-main().catch(console.error);
+main().catch((err) => log.error(err.message));
