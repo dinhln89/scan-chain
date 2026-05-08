@@ -47,18 +47,32 @@ async function main() {
 
   const newIndexExists = indexes.some(i => i.name === 'transactions_processed_block_number_id');
   if (!newIndexExists) {
-    done = withTimer('[3/4] Tạo index mới...');
+    done = withTimer('[3/5] Tạo index transactions mới...');
     await qi.addIndex('transactions', {
       fields: ['processed', 'blockNumber', 'id'],
       name: 'transactions_processed_block_number_id',
     });
     done();
   } else {
-    process.stdout.write('[3/4] Index transactions_processed_block_number_id đã tồn tại, bỏ qua\n');
+    process.stdout.write('[3/5] Index transactions_processed_block_number_id đã tồn tại, bỏ qua\n');
     log.info('Index transactions_processed_block_number_id da ton tai, bo qua');
   }
 
-  process.stdout.write('Hoàn tất!\n');
+  const contractIndexes = await qi.showIndex('contracts');
+  const isBlockIndexExists = contractIndexes.some(i => i.name === 'contracts_is_block');
+  if (!isBlockIndexExists) {
+    done = withTimer('[4/5] Tạo index contracts.isBlock...');
+    await qi.addIndex('contracts', {
+      fields: ['isBlock'],
+      name: 'contracts_is_block',
+    });
+    done();
+  } else {
+    process.stdout.write('[4/5] Index contracts_is_block đã tồn tại, bỏ qua\n');
+    log.info('Index contracts_is_block da ton tai, bo qua');
+  }
+
+  process.stdout.write('[5/5] Hoàn tất!\n');
   log.info('Hoan tat');
   process.exit(0);
 }

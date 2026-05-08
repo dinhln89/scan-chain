@@ -11,6 +11,19 @@ require("dotenv").config();
 
 const log = createLogger("listen-bsc");
 
+let blockedSet = new Set();
+let blockedSetLoadedAt = 0;
+const BLOCKED_SET_TTL = 60_000;
+
+async function getBlockedSet() {
+  const now = Date.now();
+  if (now - blockedSetLoadedAt < BLOCKED_SET_TTL) return blockedSet;
+  const rows = await Contract.findAll({ where: { isBlock: true }, attributes: ["address"] });
+  blockedSet = new Set(rows.map((c) => c.address.toLowerCase()));
+  blockedSetLoadedAt = now;
+  return blockedSet;
+}
+
 const BSC_RPC =
   process.env.BSC_RPC ||
   "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
@@ -41,13 +54,7 @@ async function processBlock() {
   const ignoredSet = IgnoreAddress.getAll();
   const ignoredMethods = IgnoreMethod.getAll();
 
-  const blockedContracts = await Contract.findAll({
-    where: { isBlock: true },
-    attributes: ["address"],
-  });
-  const blockedSet = new Set(
-    blockedContracts.map((c) => c.address.toLowerCase()),
-  );
+  const blockedSet = await getBlockedSet();
 
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();
