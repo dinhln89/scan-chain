@@ -17,18 +17,19 @@ const BSC_RPC =
 
 const web3 = new Web3(BSC_RPC);
 
+// tra ve true neu co block moi duoc xu ly
 async function processBlock() {
   const chainBlock = await web3.eth.getBlockNumber();
   const stored = await Setting.get("latest_block");
   if (!stored) {
     await Setting.set("latest_block", chainBlock.toString());
     log.info(`Chua co latest_block, luu block moi nhat: ${chainBlock}`);
-    return;
+    return false;
   }
 
   const savedBlock = BigInt(stored);
 
-  if (savedBlock >= chainBlock) return;
+  if (savedBlock >= chainBlock) return false;
 
   const nextBlock = savedBlock + 1n;
   const block = await web3.eth.getBlock(nextBlock, true);
@@ -102,6 +103,7 @@ async function processBlock() {
 
   await Setting.set("latest_block", nextBlock.toString());
   log.info(`Cap nhat len: ${nextBlock}`);
+  return true;
 }
 
 async function main() {
@@ -112,13 +114,18 @@ async function main() {
   log.info("Bat dau lang nghe BSC...");
 
   const loop = async () => {
+    let delay = 500;
     try {
-      await processBlock();
+      const hadBlock = await processBlock();
+      // co block moi: check ngay sau 100ms de bat kip block tiep theo
+      // khong co gi: BSC ~3s/block, doi 500ms de tranh spam getBlockNumber
+      delay = hadBlock ? 100 : 500;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
       await sendMessage(`<b>listen-bsc error</b>\n${err.message}`);
+      delay = 2000;
     }
-    setTimeout(loop, 100);
+    setTimeout(loop, delay);
   };
 
   loop();

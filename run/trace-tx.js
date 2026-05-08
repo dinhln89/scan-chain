@@ -8,7 +8,7 @@ const { createLogger } = require("../core/logger");
 
 const log = createLogger("trace-tx");
 
-async function processTx(tx) {
+async function processTx(tx, txData) {
   const {
     addresses,
     calls,
@@ -17,7 +17,7 @@ async function processTx(tx) {
     isTransferSender,
     selector,
     tokenSymbols,
-  } = await analyzeTx(tx.hash);
+  } = await analyzeTx(tx.hash, txData);
 
   if (isTransferSender) {
     const getReservesAddrs = new Set(
@@ -75,7 +75,7 @@ async function processNext() {
 
   log.info(`Xu ly tx: ${tx.hash}`);
   try {
-    await processTx(tx);
+    await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
     log.info(`DONE: https://bscscan.com/tx/${tx.hash}`);
   } catch (err) {

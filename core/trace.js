@@ -175,13 +175,14 @@ async function batchGetErc20Symbols(tokenAddresses) {
   return Object.fromEntries(tokenAddresses.map((addr, i) => [addr, decodeErc20StringResult(results[i])]));
 }
 
-async function analyzeTx(txHash) {
-  // Round 1: fetch receipt + tx in parallel
-  const [receipt, tx] = await Promise.all([
+// txData co the truyen tu DB de bo qua eth_getTransactionByHash
+async function analyzeTx(txHash, txData = null) {
+  const [receipt, fetchedTx] = await Promise.all([
     rpc("eth_getTransactionReceipt", [txHash]),
-    rpc("eth_getTransactionByHash", [txHash]),
+    txData ? Promise.resolve(null) : rpc("eth_getTransactionByHash", [txHash]),
   ]);
 
+  const tx = txData || fetchedTx;
   const transfers = decodeTransfers(receipt?.logs || []);
   if (transfers.length === 0) throw new Error("NO_ERC20_TRANSFER");
   if (!tx) throw new Error("Khong tim thay tx: " + txHash);
