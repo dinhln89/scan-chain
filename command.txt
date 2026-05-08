@@ -1,0 +1,1 @@
+sudo tail -f /opt/lampp/var/mysql/dinhln-local-slow.log
