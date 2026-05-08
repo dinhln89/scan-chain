@@ -26,7 +26,13 @@ const BSC_RPC =
   process.env.BSC_RPC ||
   "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
 
-async function rpc(method, params) {
+let _rpcHandler = null;
+
+function setRpcHandler(fn) {
+  _rpcHandler = fn;
+}
+
+async function rawRpc(method, params) {
   const res = await fetch(BSC_RPC, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -37,8 +43,16 @@ async function rpc(method, params) {
   return json.result;
 }
 
+async function rpc(method, params) {
+  if (_rpcHandler) return _rpcHandler(method, params);
+  return rawRpc(method, params);
+}
+
 async function batchRpc(requests) {
   if (requests.length === 0) return [];
+  if (_rpcHandler) {
+    return Promise.all(requests.map((r) => _rpcHandler(r.method, r.params)));
+  }
   const res = await fetch(BSC_RPC, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -249,5 +263,7 @@ module.exports = {
   getErc20Symbol,
   batchGetErc20Symbols,
   rpc,
+  rawRpc,
   batchRpc,
+  setRpcHandler,
 };
