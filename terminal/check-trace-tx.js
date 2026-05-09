@@ -21,24 +21,12 @@ async function main() {
     selector,
     tokenSymbols,
     hasSignature,
-    hasV3PathInInput,
+    hasV3Path,
   } = await analyzeTx(txHash);
 
   const tokenSymbolList = Object.values(tokenSymbols)
     .filter(Boolean)
     .join(", ");
-
-  console.log("=".repeat(60));
-  console.log("TX                 :", txHash);
-  console.log("Link               :", `https://bscscan.com/tx/${txHash}`);
-  console.log("selector           :", selector ?? "");
-  console.log("isCallInput        :", isCallInput);
-  console.log("isTransferSender   :", isTransferSender);
-  console.log("isTransferFromErc20:", isTransferFromErc20);
-  console.log("hasSignature       :", hasSignature);
-  console.log("hasV3PathInInput  :", hasV3PathInInput);
-  console.log("tokenSymbols       :", tokenSymbolList || "(none)");
-  console.log("=".repeat(60));
 
   console.log("\n[Input Addresses]");
   if (addresses.length === 0) console.log("  (none)");
@@ -70,6 +58,18 @@ async function main() {
       console.log(`       amount=${t.amount}`);
     });
   }
+
+  console.log("=".repeat(60));
+  console.log("TX                 :", txHash);
+  console.log("Link               :", `https://bscscan.com/tx/${txHash}`);
+  console.log("selector           :", selector ?? "");
+  console.log("isCallInput        :", isCallInput);
+  console.log("isTransferSender   :", isTransferSender);
+  console.log("isTransferFromErc20:", isTransferFromErc20);
+  console.log("hasSignature       :", hasSignature);
+  console.log("hasV3Path          :", hasV3Path);
+  console.log("tokenSymbols       :", tokenSymbolList || "(none)");
+  console.log("=".repeat(60));
 }
 
 main().catch((err) => {
