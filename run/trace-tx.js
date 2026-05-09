@@ -33,6 +33,7 @@ async function processTx(tx, txData) {
           `https://bscscan.com/tx/${tx.hash}`,
           tokenSymbolList,
           "YES",
+          selector ?? "",
           tx.blockNumber,
           now.toLocaleString(),
         ],
