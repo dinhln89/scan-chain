@@ -12,9 +12,9 @@ async function append(rows, { retries = 4, baseDelay = 1000, sheet } = {}) {
         headers: { 'Content-Type': 'application/json' },
         body: payload,
       });
-      if (res.ok) return;
-      const text = await res.text();
-      lastErr = new Error(`Apps Script error: ${res.status} ${text}`);
+      const json = await res.json();
+      if (res.ok && !json.error) return;
+      lastErr = new Error(`Apps Script error: ${json.error || res.status}`);
     } catch (err) {
       lastErr = err;
     }
