@@ -96,6 +96,25 @@ function extractCalls(calls = [], results = []) {
   return results;
 }
 
+// Detect 65-byte ECDSA signature (r+s+v) in ABI-encoded input
+function hasSignatureInInput(input) {
+  if (!input || input.length < 10) return false;
+  const data = input.slice(10).toLowerCase();
+  for (let i = 0; i + 64 <= data.length; i += 64) {
+    const chunk = data.slice(i, i + 64);
+    if (
+      chunk ===
+      "0000000000000000000000000000000000000000000000000000000000000041"
+    ) {
+      const sigStart = i + 64;
+      if (sigStart + 130 > data.length) continue;
+      const v = parseInt(data.slice(sigStart + 128, sigStart + 130), 16);
+      if (v === 0x1b || v === 0x1c) return true;
+    }
+  }
+  return false;
+}
+
 function isLikelyAddress(chunk) {
   if (!chunk.startsWith("000000000000000000000000")) return false;
   const addrPart = chunk.slice(24);
@@ -208,6 +227,7 @@ async function analyzeTx(txHash, txData = null) {
   const selector = tx.input?.slice(0, 10)?.toLowerCase();
 
   if (ignoredMethods.has(selector)) throw new Error("IGNORED_METHOD");
+  if (hasSignatureInInput(tx.input)) throw new Error("IGNORED_SIGN");
   if (ignoredAddrs.has(tx.from?.toLowerCase()))
     throw new Error("IGNORED_ADDRESS");
   if (tx.to && ignoredAddrs.has(tx.to.toLowerCase()))
@@ -293,6 +313,7 @@ async function analyzeTx(txHash, txData = null) {
     isTransferFromErc20,
     selector,
     tokenSymbols,
+    hasSignature: hasSignatureInInput(tx.input),
   };
 }
 
@@ -301,6 +322,7 @@ module.exports = {
   extractAddressesFromInput,
   extractCalls,
   decodeTransfers,
+  hasSignatureInInput,
   getErc20Name,
   getErc20Symbol,
   batchGetErc20Symbols,

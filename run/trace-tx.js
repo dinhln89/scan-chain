@@ -100,7 +100,8 @@ async function processNext() {
     if (
       err.message === "NO_ERC20_TRANSFER" ||
       err.message === "IGNORED_METHOD" ||
-      err.message === "IGNORED_ADDRESS"
+      err.message === "IGNORED_ADDRESS" ||
+      err.message === "IGNORED_SIGN"
     ) {
       await tx.update({ processed: true });
       log.info(`Bo qua tx ${tx.hash}: ${err.message}`);
