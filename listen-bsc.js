@@ -9,7 +9,7 @@ const { sendMessage } = require("./core/telegram");
 const { createLogger } = require("./core/logger");
 require("dotenv").config();
 
-const log = createLogger("listen-bsc");
+const log = createLogger(__filename);
 
 let blockedSet = new Set();
 let blockedSetLoadedAt = 0;
@@ -18,7 +18,10 @@ const BLOCKED_SET_TTL = 60_000;
 async function getBlockedSet() {
   const now = Date.now();
   if (now - blockedSetLoadedAt < BLOCKED_SET_TTL) return blockedSet;
-  const rows = await Contract.findAll({ where: { isBlock: true }, attributes: ["address"] });
+  const rows = await Contract.findAll({
+    where: { isBlock: true },
+    attributes: ["address"],
+  });
   blockedSet = new Set(rows.map((c) => c.address.toLowerCase()));
   blockedSetLoadedAt = now;
   return blockedSet;
@@ -69,7 +72,9 @@ async function processBlock() {
     );
   });
 
-  log.info(`Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`);
+  log.info(
+    `Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`,
+  );
 
   for (const tx of filtered) {
     if (tx.input.length > 5000) {
@@ -129,7 +134,6 @@ async function main() {
       delay = hadBlock ? 100 : 500;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
-      await sendMessage(`<b>listen-bsc error</b>\n${err.message}`);
       delay = 2000;
     }
     setTimeout(loop, delay);

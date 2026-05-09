@@ -1,7 +1,7 @@
 const { Web3 } = require("web3");
 const { createLogger } = require("./core/logger");
 
-const log = createLogger("terminal", { console: true });
+const log = createLogger(__filename, { console: true });
 
 const BSC_RPC =
   process.env.BSC_RPC ||

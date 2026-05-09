@@ -3,10 +3,9 @@ const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx } = require("../core/trace");
 const { append } = require("../core/sheets");
-const { sendMessage } = require("../core/telegram");
 const { createLogger } = require("../core/logger");
 
-const log = createLogger("trace-tx");
+const log = createLogger(__filename);
 
 async function processTx(tx, txData) {
   const {
@@ -88,9 +87,6 @@ async function processNext() {
       log.info(`Bo qua tx ${tx.hash}: ${err.message}`);
     } else {
       log.error(`Loi tx ${tx.hash}: ${err.message}`);
-      await sendMessage(
-        `<b>trace-tx error</b>\nHash: <code>${tx.hash}</code>\n${err.message}`,
-      );
     }
   }
 }

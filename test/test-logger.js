@@ -1,6 +1,6 @@
 const { createLogger } = require("../core/logger");
 
-const log = createLogger("trace-tx");
+const log = createLogger(__filename);
 
 async function simulateError() {
   try {

@@ -1,7 +1,7 @@
 const sequelize = require('./db');
 const { createLogger } = require('./core/logger');
 
-const log = createLogger('sync', { console: false });
+const log = createLogger(__filename, { console: false });
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 

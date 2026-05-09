@@ -1,5 +1,6 @@
 const winston = require("winston");
 const path = require("path");
+const { sendMessage } = require("./telegram");
 
 const { combine, timestamp, printf, colorize } = winston.format;
 
@@ -15,7 +16,8 @@ const consoleFormat = combine(
   printf(({ level, message }) => `${level}: ${message}`)
 );
 
-function createLogger(name, { console: withConsole = false } = {}) {
+function createLogger(nameOrFile, { console: withConsole = false } = {}) {
+  const name = path.basename(nameOrFile, path.extname(nameOrFile));
   const MAX_SIZE = 1 * 1024 * 1024 * 1024; // 1GB
 
   const transports = [
@@ -47,9 +49,10 @@ function createLogger(name, { console: withConsole = false } = {}) {
   const logger = winston.createLogger({ transports });
 
   const originalError = logger.error.bind(logger);
-  logger.error = (...args) => {
-    console.error(`[${name}] ERROR:`, ...args);
-    return originalError(...args);
+  logger.error = (message, ...args) => {
+    console.error(`[${name}] ERROR:`, message, ...args);
+    sendMessage(`<b>${name} error</b>\n${message}`).catch(() => {});
+    return originalError(message, ...args);
   };
 
   return logger;

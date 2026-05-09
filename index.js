@@ -2,7 +2,7 @@ const sequelize = require("./db");
 const User = require("./models/User");
 const { createLogger } = require("./core/logger");
 
-const log = createLogger("terminal", { console: true });
+const log = createLogger(__filename, { console: true });
 
 async function main() {
   await sequelize.authenticate();

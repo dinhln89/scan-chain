@@ -3,7 +3,7 @@ const path = require('path');
 const https = require('https');
 const { createLogger } = require('./logger');
 
-const log = createLogger('app');
+const log = createLogger(__filename);
 
 const FILE = path.resolve(__dirname, '../data/ignore-methods.json');
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1198058145';
