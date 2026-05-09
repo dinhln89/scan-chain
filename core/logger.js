@@ -40,6 +40,7 @@ function createLogger(name, { console: withConsole = false } = {}) {
     new winston.transports.Console({
       level: withConsole ? "info" : "error",
       format: consoleFormat,
+      stderrLevels: [],
     })
   );
 
