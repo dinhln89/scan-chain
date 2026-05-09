@@ -14,9 +14,32 @@ async function processTx(tx, txData) {
     transfers,
     isCallInput,
     isTransferSender,
+    isTransferFromErc20,
     selector,
     tokenSymbols,
   } = await analyzeTx(tx.hash, txData);
+
+  const tokenSymbolList = Object.values(tokenSymbols)
+    .filter(Boolean)
+    .join(", ");
+
+  if (isTransferFromErc20) {
+    const now = new Date();
+    await append(
+      [
+        [
+          tx.hash,
+          `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
+          `https://bscscan.com/tx/${tx.hash}`,
+          tokenSymbolList,
+          "YES",
+          tx.blockNumber,
+          now.toLocaleString(),
+        ],
+      ],
+      { sheet: "Sheet4" },
+    );
+  }
 
   if (isTransferSender) {
     const getReservesAddrs = new Set(
@@ -38,10 +61,6 @@ async function processTx(tx, txData) {
     //   isGetReserves: getReservesAddrs.size > 0,
     //   isBalanceOf: balanceOfAddrs.size > 0,
     // });
-
-    const tokenSymbolList = Object.values(tokenSymbols)
-      .filter(Boolean)
-      .join(", ");
 
     const now = new Date();
     await append([

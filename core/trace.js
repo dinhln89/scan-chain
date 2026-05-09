@@ -57,7 +57,12 @@ async function batchRpc(requests) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(
-      requests.map((r, i) => ({ jsonrpc: "2.0", id: i, method: r.method, params: r.params })),
+      requests.map((r, i) => ({
+        jsonrpc: "2.0",
+        id: i,
+        method: r.method,
+        params: r.params,
+      })),
     ),
   });
   const json = await res.json();
@@ -156,12 +161,18 @@ function decodeErc20StringResult(result) {
 }
 
 async function getErc20Name(tokenAddress) {
-  const result = await rpc("eth_call", [{ to: tokenAddress, data: "0x06fdde03" }, "latest"]);
+  const result = await rpc("eth_call", [
+    { to: tokenAddress, data: "0x06fdde03" },
+    "latest",
+  ]);
   return decodeErc20StringResult(result);
 }
 
 async function getErc20Symbol(tokenAddress) {
-  const result = await rpc("eth_call", [{ to: tokenAddress, data: "0x95d89b41" }, "latest"]);
+  const result = await rpc("eth_call", [
+    { to: tokenAddress, data: "0x95d89b41" },
+    "latest",
+  ]);
   return decodeErc20StringResult(result);
 }
 
@@ -172,7 +183,12 @@ async function batchGetErc20Symbols(tokenAddresses) {
       params: [{ to: addr, data: "0x95d89b41" }, "latest"],
     })),
   );
-  return Object.fromEntries(tokenAddresses.map((addr, i) => [addr, decodeErc20StringResult(results[i])]));
+  return Object.fromEntries(
+    tokenAddresses.map((addr, i) => [
+      addr,
+      decodeErc20StringResult(results[i]),
+    ]),
+  );
 }
 
 // txData co the truyen tu DB de bo qua eth_getTransactionByHash
@@ -192,56 +208,80 @@ async function analyzeTx(txHash, txData = null) {
   const selector = tx.input?.slice(0, 10)?.toLowerCase();
 
   if (ignoredMethods.has(selector)) throw new Error("IGNORED_METHOD");
-  if (ignoredAddrs.has(tx.from?.toLowerCase())) throw new Error("IGNORED_ADDRESS");
-  if (tx.to && ignoredAddrs.has(tx.to.toLowerCase())) throw new Error("IGNORED_ADDRESS");
+  if (ignoredAddrs.has(tx.from?.toLowerCase()))
+    throw new Error("IGNORED_ADDRESS");
+  if (tx.to && ignoredAddrs.has(tx.to.toLowerCase()))
+    throw new Error("IGNORED_ADDRESS");
 
   const addresses = extractAddressesFromInput(tx.input);
   const sender = tx.from.toLowerCase();
   const inputSet = new Set(addresses.map((a) => a.toLowerCase()));
 
+  const addersExcludeFrom = addresses
+    .map((a) => a.toLowerCase())
+    .filter((a) => a !== sender);
+
   // tim cac transfer to den sender hoac input address
   const matchedTos = [
     ...new Set(
-      transfers.map((t) => t.to.toLowerCase()).filter((to) => to === sender || inputSet.has(to)),
+      transfers
+        .map((t) => t.to.toLowerCase())
+        .filter((to) => to === sender || inputSet.has(to)),
     ),
   ];
-  if (matchedTos.length === 0) throw new Error("NO_ERC20_TRANSFER");
+  const hasTransferInAddresses = transfers.some(
+    (t) =>
+      inputSet.has(t.from.toLowerCase()) || inputSet.has(t.to.toLowerCase()),
+  );
+  if (matchedTos.length === 0 && !hasTransferInAddresses)
+    throw new Error("NO_ERC20_TRANSFER");
 
-  const isTransferSender = transfers.some((t) => t.from.toLowerCase() === sender);
+  const isTransferSender = transfers.some(
+    (t) => t.from.toLowerCase() === sender,
+  );
 
   const tokensSentToSender = [
     ...new Set(
-      transfers.filter((t) => t.to.toLowerCase() === sender).map((t) => t.token.toLowerCase()),
+      transfers
+        .filter((t) => t.to.toLowerCase() === sender)
+        .map((t) => t.token.toLowerCase()),
     ),
   ];
 
-  // Round 2: only fetch trace when needed; batch symbol lookups into one HTTP request
+  // Round 2: fetch trace; batch symbol lookups only when needed
   let calls = [];
   let tokenSymbols = {};
   let isCallInput = false;
 
+  const trace = await rpc("debug_traceTransaction", [
+    txHash,
+    { tracer: "callTracer" },
+  ]);
+  calls = extractCalls([trace, ...(trace.calls || [])]);
+
+  calls.forEach((c) => {
+    if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
+    if (c.fn === "balanceOf(address)") {
+      c.wallet = c.input?.length >= 34 ? "0x" + c.input.slice(34) : null;
+      c.decoded = decodeBalanceOf(c.output);
+    }
+  });
+
   if (isTransferSender) {
-    const [trace, symbols] = await Promise.all([
-      rpc("debug_traceTransaction", [txHash, { tracer: "callTracer" }]),
-      batchGetErc20Symbols(tokensSentToSender),
-    ]);
-
-    tokenSymbols = symbols;
-    calls = extractCalls([trace, ...(trace.calls || [])]);
-
-    calls.forEach((c) => {
-      if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
-      if (c.fn === "balanceOf(address)") {
-        c.wallet = c.input?.length >= 34 ? "0x" + c.input.slice(34) : null;
-        c.decoded = decodeBalanceOf(c.output);
-      }
-    });
+    tokenSymbols = await batchGetErc20Symbols(tokensSentToSender);
 
     const callAddrs = calls.map((c) => c.to?.toLowerCase());
     if (callAddrs.includes(sender) || callAddrs.some((a) => inputSet.has(a))) {
       isCallInput = true;
     }
   }
+
+  const addersExcludeFromSet = new Set(addersExcludeFrom);
+  const isTransferFromErc20 = calls.some(
+    (c) =>
+      c.input?.toLowerCase().startsWith("0x23b872dd") &&
+      addersExcludeFromSet.has(c.from?.toLowerCase()),
+  );
 
   return {
     txHash,
@@ -250,6 +290,7 @@ async function analyzeTx(txHash, txData = null) {
     transfers,
     isCallInput,
     isTransferSender,
+    isTransferFromErc20,
     selector,
     tokenSymbols,
   };
