@@ -25,7 +25,11 @@ async function processTx(tx, txData) {
     .join(", ");
 
   if (isTransferFromErc20) {
-    const { notRevert: simulatorNotRevert } = await simulateTx(tx.to, tx.input, tx.blockNumber);
+    const { notRevert: simulatorNotRevert } = await simulateTx(
+      tx.to,
+      tx.input,
+      tx.blockNumber,
+    );
     const now = new Date();
     await append(
       [
@@ -39,7 +43,7 @@ async function processTx(tx, txData) {
           tx.blockNumber,
           now.toLocaleString(),
           hasV3Path ? "v3Path" : "",
-          simulatorNotRevert ? "SIM_OK" : "SIM_REVERT",
+          simulatorNotRevert ? "OK" : "SIM_REVERT",
         ],
       ],
       { sheet: "Sheet4" },
