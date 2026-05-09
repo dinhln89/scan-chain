@@ -7,6 +7,7 @@ const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const { hasSignatureInInput } = require("../core/trace");
+const { append } = require("../core/sheets");
 
 const SPREADSHEET_ID = "1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs";
 const SHEET_URL = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=0`;
@@ -60,6 +61,12 @@ async function main() {
 
   console.log(`\nTx co chu ky trong input: ${withSignature.length}`);
   console.log(withSignature);
+
+  if (withSignature.length > 0) {
+    console.log("\nDang insert vao Sheet5...");
+    await append(withSignature.map((h) => [h]), { sheet: "Sheet5" });
+    console.log("Insert xong.");
+  }
 
   process.exit(0);
 }

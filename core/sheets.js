@@ -20,4 +20,16 @@ async function append(rows, { retries = 4, baseDelay = 1000, sheet } = {}) {
   throw lastErr;
 }
 
-module.exports = { append };
+async function deleteRows(values, { sheet } = {}) {
+  const res = await fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "deleteRows", values, ...(sheet ? { sheet } : {}) }),
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Apps Script error: ${res.status} ${text}`);
+  }
+}
+
+module.exports = { append, deleteRows };
