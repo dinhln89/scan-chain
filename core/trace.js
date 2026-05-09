@@ -96,6 +96,26 @@ function extractCalls(calls = [], results = []) {
   return results;
 }
 
+// V3 path: token(20) + fee(3) + token(20) [+ fee(3) + token(20) ...]
+// Valid lengths: 43 (1-hop), 66 (2-hop), 89 (3-hop), 112 (4-hop)
+const V3_PATH_LENGTHS = new Set([43, 66, 89, 112]);
+const V3_VALID_FEES = new Set([100, 500, 2500, 3000, 10000]);
+
+function hasV3PathInInput(input) {
+  if (!input || input.length < 10) return false;
+  const data = input.slice(10).toLowerCase();
+  for (let i = 0; i + 64 <= data.length; i += 64) {
+    const len = parseInt(data.slice(i, i + 64), 16);
+    if (!V3_PATH_LENGTHS.has(len)) continue;
+    const pathStart = i + 64;
+    if (pathStart + len * 2 > data.length) continue;
+    // fee is at byte 20 in the path (40 hex chars in)
+    const fee = parseInt(data.slice(pathStart + 40, pathStart + 46), 16);
+    if (V3_VALID_FEES.has(fee)) return true;
+  }
+  return false;
+}
+
 // Detect 65-byte ECDSA signature (r+s+v) in ABI-encoded input
 function hasSignatureInInput(input) {
   if (!input || input.length < 10) return false;
@@ -313,6 +333,7 @@ async function analyzeTx(txHash, txData = null) {
     selector,
     tokenSymbols,
     hasSignature: hasSignatureInInput(tx.input),
+    hasV3Path: hasV3PathInInput(tx.input),
   };
 }
 
@@ -322,6 +343,7 @@ module.exports = {
   extractCalls,
   decodeTransfers,
   hasSignatureInInput,
+  hasV3PathInInput,
   getErc20Name,
   getErc20Symbol,
   batchGetErc20Symbols,

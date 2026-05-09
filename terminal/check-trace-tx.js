@@ -21,9 +21,12 @@ async function main() {
     selector,
     tokenSymbols,
     hasSignature,
+    hasV3PathInInput,
   } = await analyzeTx(txHash);
 
-  const tokenSymbolList = Object.values(tokenSymbols).filter(Boolean).join(", ");
+  const tokenSymbolList = Object.values(tokenSymbols)
+    .filter(Boolean)
+    .join(", ");
 
   console.log("=".repeat(60));
   console.log("TX                 :", txHash);
@@ -33,6 +36,7 @@ async function main() {
   console.log("isTransferSender   :", isTransferSender);
   console.log("isTransferFromErc20:", isTransferFromErc20);
   console.log("hasSignature       :", hasSignature);
+  console.log("hasV3PathInInput  :", hasV3PathInInput);
   console.log("tokenSymbols       :", tokenSymbolList || "(none)");
   console.log("=".repeat(60));
 
