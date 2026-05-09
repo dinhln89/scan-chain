@@ -44,7 +44,15 @@ function createLogger(name, { console: withConsole = false } = {}) {
     })
   );
 
-  return winston.createLogger({ transports });
+  const logger = winston.createLogger({ transports });
+
+  const originalError = logger.error.bind(logger);
+  logger.error = (...args) => {
+    console.error(`[${name}] ERROR:`, ...args);
+    return originalError(...args);
+  };
+
+  return logger;
 }
 
 module.exports = { createLogger };
