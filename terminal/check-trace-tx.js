@@ -1,3 +1,7 @@
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../.env"),
+});
+
 const { analyzeTx } = require("../core/trace");
 
 async function main() {
@@ -7,13 +11,29 @@ async function main() {
     process.exit(1);
   }
 
-  const { addresses, calls, transfers, isCallInput, isTransferSender } = await analyzeTx(txHash);
+  const {
+    addresses,
+    calls,
+    transfers,
+    isCallInput,
+    isTransferSender,
+    isTransferFromErc20,
+    selector,
+    tokenSymbols,
+    hasSignature,
+  } = await analyzeTx(txHash);
+
+  const tokenSymbolList = Object.values(tokenSymbols).filter(Boolean).join(", ");
 
   console.log("=".repeat(60));
-  console.log("TX              :", txHash);
-  console.log("Link            :", `https://bscscan.com/tx/${txHash}`);
-  console.log("isCallInput     :", isCallInput);
-  console.log("isTransferSender:", isTransferSender);
+  console.log("TX                 :", txHash);
+  console.log("Link               :", `https://bscscan.com/tx/${txHash}`);
+  console.log("selector           :", selector ?? "");
+  console.log("isCallInput        :", isCallInput);
+  console.log("isTransferSender   :", isTransferSender);
+  console.log("isTransferFromErc20:", isTransferFromErc20);
+  console.log("hasSignature       :", hasSignature);
+  console.log("tokenSymbols       :", tokenSymbolList || "(none)");
   console.log("=".repeat(60));
 
   console.log("\n[Input Addresses]");

@@ -237,9 +237,8 @@ async function analyzeTx(txHash, txData = null) {
   const sender = tx.from.toLowerCase();
   const inputSet = new Set(addresses.map((a) => a.toLowerCase()));
 
-  const addersExcludeFrom = addresses
-    .map((a) => a.toLowerCase())
-    .filter((a) => a !== sender);
+  const addersExcludeFrom = addresses.map((a) => a.toLowerCase());
+  // .filter((a) => a !== sender);
 
   // tim cac transfer to den sender hoac input address
   const matchedTos = [
@@ -297,11 +296,11 @@ async function analyzeTx(txHash, txData = null) {
   }
 
   const addersExcludeFromSet = new Set(addersExcludeFrom);
-  const isTransferFromErc20 = calls.some(
-    (c) =>
-      c.input?.toLowerCase().startsWith("0x23b872dd") &&
-      addersExcludeFromSet.has(c.from?.toLowerCase()),
-  );
+  const isTransferFromErc20 = calls.some((c) => {
+    if (!c.input?.toLowerCase().startsWith("0x23b872dd")) return false;
+    const transferFromAddr = "0x" + c.input.slice(34, 74).toLowerCase();
+    return addersExcludeFromSet.has(transferFromAddr);
+  });
 
   return {
     txHash,
