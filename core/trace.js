@@ -337,8 +337,26 @@ async function analyzeTx(txHash, txData = null) {
   };
 }
 
+const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
+
+async function simulateTx(to, input, blockNumber) {
+  const blockRef = blockNumber
+    ? "0x" + (parseInt(blockNumber, 10) - 1).toString(16)
+    : "latest";
+  try {
+    const result = await rpc("eth_call", [
+      { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: "0x5F5E100" },
+      blockRef,
+    ]);
+    return { notRevert: true, result: result || null, error: null };
+  } catch (err) {
+    return { notRevert: false, result: null, error: err.message };
+  }
+}
+
 module.exports = {
   analyzeTx,
+  simulateTx,
   extractAddressesFromInput,
   extractCalls,
   decodeTransfers,

@@ -1,7 +1,7 @@
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
-const { analyzeTx } = require("../core/trace");
+const { analyzeTx, simulateTx } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -25,6 +25,7 @@ async function processTx(tx, txData) {
     .join(", ");
 
   if (isTransferFromErc20) {
+    const { notRevert: simulatorNotRevert } = await simulateTx(tx.to, tx.input, tx.blockNumber);
     const now = new Date();
     await append(
       [
@@ -38,6 +39,7 @@ async function processTx(tx, txData) {
           tx.blockNumber,
           now.toLocaleString(),
           hasV3Path ? "v3Path" : "",
+          simulatorNotRevert ? "SIM_OK" : "SIM_REVERT",
         ],
       ],
       { sheet: "Sheet4" },
