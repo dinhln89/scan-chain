@@ -1,7 +1,7 @@
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
-const { analyzeTx, simulateTx } = require("../core/trace");
+const { analyzeTx, simulateTx, batchRpc } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -61,6 +61,30 @@ async function processTx(tx, txData) {
         .filter((c) => c.fn === "balanceOf(address)")
         .map((c) => c.to?.toLowerCase()),
     );
+    const balanceOfWallets = [
+      ...new Set(
+        calls
+          .filter((c) => c.fn === "balanceOf(address)" && c.wallet)
+          .map((c) => c.wallet.toLowerCase()),
+      ),
+    ];
+
+    const swapPairWallets = await (async () => {
+      if (balanceOfWallets.length === 0) return [];
+      const known = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
+      const unknown = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
+      if (unknown.length === 0) return known;
+      const results = await batchRpc(
+        unknown.map((addr) => ({
+          method: "eth_call",
+          params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
+        })),
+      );
+      const confirmed = unknown.filter(
+        (_, i) => results[i] && results[i] !== "0x" && results[i].length >= 194,
+      );
+      return [...known, ...confirmed];
+    })();
 
     // await ReviewTx.upsert({
     //   txHash: tx.hash,
@@ -80,7 +104,7 @@ async function processTx(tx, txData) {
         tokenSymbolList,
         isCallInput ? "YES" : "",
         getReservesAddrs.size > 0 ? "YES" : "",
-        balanceOfAddrs.size > 0 ? "YES" : "",
+        swapPairWallets.length > 0 ? "YES" : "",
         selector ?? "",
         tx.blockNumber,
         now.toLocaleString(),
