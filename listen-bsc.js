@@ -5,6 +5,7 @@ const Transaction = require("./models/Transaction");
 const Contract = require("./models/Contract");
 const IgnoreAddress = require("./core/ignore-address");
 const IgnoreMethod = require("./core/ignore-method");
+const { hasV3PathInInput, hasSignatureInInput } = require("./core/trace");
 const { sendMessage } = require("./core/telegram");
 const { createLogger } = require("./core/logger");
 require("dotenv").config();
@@ -68,7 +69,9 @@ async function processBlock() {
       !ignoredSet.has(from) &&
       !ignoredSet.has(to) &&
       !ignoredMethods.has(selector) &&
-      !blockedSet.has(to)
+      !blockedSet.has(to) &&
+      !hasV3PathInInput(tx.input) &&
+      !hasSignatureInInput(tx.input)
     );
   });
 

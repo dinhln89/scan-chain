@@ -24,12 +24,13 @@ async function processTx(tx, txData) {
     .filter(Boolean)
     .join(", ");
 
+  const { notRevert: simulatorNotRevert } = await simulateTx(
+    tx.to,
+    tx.input,
+    tx.blockNumber,
+  );
+
   if (isTransferFromErc20) {
-    const { notRevert: simulatorNotRevert } = await simulateTx(
-      tx.to,
-      tx.input,
-      tx.blockNumber,
-    );
     const now = new Date();
     if (simulatorNotRevert) {
       await append(
@@ -43,7 +44,6 @@ async function processTx(tx, txData) {
             selector ?? "",
             tx.blockNumber,
             now.toLocaleString(),
-            hasV3Path ? "v3Path" : "",
           ],
         ],
         { sheet: "Sheet4" },
@@ -112,7 +112,8 @@ async function processNext() {
       err.message === "NO_ERC20_TRANSFER" ||
       err.message === "IGNORED_METHOD" ||
       err.message === "IGNORED_ADDRESS" ||
-      err.message === "IGNORED_SIGN"
+      err.message === "IGNORED_SIGN" ||
+      err.message === "IGNORED_V3_PATH"
     ) {
       await tx.update({ processed: true });
       log.info(`Bo qua tx ${tx.hash}: ${err.message}`);

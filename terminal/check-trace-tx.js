@@ -20,8 +20,7 @@ async function main() {
     isTransferFromErc20,
     selector,
     tokenSymbols,
-    hasSignature,
-    hasV3Path,
+    hasSignature
   } = await analyzeTx(txHash);
 
   const tokenSymbolList = Object.values(tokenSymbols)

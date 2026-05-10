@@ -248,6 +248,7 @@ async function analyzeTx(txHash, txData = null) {
 
   if (ignoredMethods.has(selector)) throw new Error("IGNORED_METHOD");
   if (hasSignatureInInput(tx.input)) throw new Error("IGNORED_SIGN");
+  if (hasV3PathInInput(tx.input)) throw new Error("IGNORED_V3_PATH");
   if (ignoredAddrs.has(tx.from?.toLowerCase()))
     throw new Error("IGNORED_ADDRESS");
   if (tx.to && ignoredAddrs.has(tx.to.toLowerCase()))
@@ -333,7 +334,6 @@ async function analyzeTx(txHash, txData = null) {
     selector,
     tokenSymbols,
     hasSignature: hasSignatureInInput(tx.input),
-    hasV3Path: hasV3PathInInput(tx.input),
   };
 }
 
