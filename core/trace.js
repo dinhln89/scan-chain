@@ -231,11 +231,30 @@ async function getErc20Name(tokenAddress) {
 
 const Token = require("../models/Token");
 
+function makeCache(max = 5000) {
+  const map = new Map();
+  return {
+    get: (k) => map.get(k),
+    has: (k) => map.has(k),
+    set: (k, v) => {
+      if (map.size >= max) map.delete(map.keys().next().value);
+      map.set(k, v);
+    },
+  };
+}
+
+const _tokenCache = makeCache(5000);
+
 async function getErc20Symbol(tokenAddress) {
   const addr = tokenAddress.toLowerCase();
 
+  if (_tokenCache.has(addr)) return _tokenCache.get(addr);
+
   const cached = await Token.findByPk(addr);
-  if (cached) return cached.symbol;
+  if (cached) {
+    _tokenCache.set(addr, cached.symbol);
+    return cached.symbol;
+  }
 
   const result = await rpc("eth_call", [
     { to: addr, data: "0x95d89b41" },
@@ -243,6 +262,7 @@ async function getErc20Symbol(tokenAddress) {
   ]);
   const symbol = decodeErc20StringResult(result);
   await Token.upsert({ address: addr, symbol });
+  _tokenCache.set(addr, symbol);
   return symbol;
 }
 
@@ -364,6 +384,7 @@ async function simulateTx(to, input) {
 
 module.exports = {
   analyzeTx,
+  makeCache,
   batchRpc,
   decodeTransfers,
   extractAddressesFromInput,

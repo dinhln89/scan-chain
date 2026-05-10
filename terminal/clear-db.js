@@ -10,9 +10,6 @@ const Setting = require("../models/Setting");
 async function main() {
   await sequelize.sync();
 
-  await Contract.destroy({ where: {}, truncate: true });
-  console.log("Xoa Contract xong");
-
   await Transaction.destroy({ where: {}, truncate: true });
   console.log("Xoa Transaction xong");
 
@@ -21,7 +18,7 @@ async function main() {
 
   // Drop va recreate tat ca index
   const qi = sequelize.getQueryInterface();
-  const tables = ["transactions", "settings", "contracts"];
+  const tables = ["transactions", "settings"];
   for (const table of tables) {
     try {
       const indexes = await qi.showIndex(table);

@@ -1,7 +1,9 @@
 const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
-const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
+const { analyzeTx, batchRpc, getErc20Symbol, makeCache, simulateTx } = require("../core/trace");
+
+const _contractCache = makeCache(5000);
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -50,6 +52,12 @@ async function processTx(tx, txData) {
   }
 
   if (isTransferSender) {
+    const getReservesAddrs = new Set(
+      calls
+        .filter((c) => c.fn === "getReserves()")
+        .map((c) => c.to?.toLowerCase()),
+    );
+
     const balanceOfWallets = [
       ...new Set(
         calls
@@ -61,14 +69,31 @@ async function processTx(tx, txData) {
     const swapPairWallets = await (async () => {
       if (balanceOfWallets.length === 0) return [];
 
-      const contracts = await Contract.findAll({
-        where: { address: balanceOfWallets },
-        attributes: ["address", "isPair"],
-      });
-      const cached = new Map(contracts.map((c) => [c.address, c.isPair]));
+      // Từ trace: chắc chắn là pair
+      const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
+      const newPairs = fromTrace.filter((a) => _contractCache.get(a) !== true);
+      if (newPairs.length > 0) {
+        await Promise.all(newPairs.map((a) => Contract.upsert({ address: a, isPair: true })));
+        newPairs.forEach((a) => _contractCache.set(a, true));
+      }
 
-      const known = balanceOfWallets.filter((a) => cached.get(a) === true);
-      const unknown = balanceOfWallets.filter((a) => cached.get(a) === null || cached.get(a) === undefined);
+      // Không từ trace: memory cache → DB → RPC
+      const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
+      const known = notFromTrace.filter((a) => _contractCache.get(a) === true);
+      const needDb = notFromTrace.filter((a) => !_contractCache.has(a));
+
+      if (needDb.length > 0) {
+        const rows = await Contract.findAll({
+          where: { address: needDb },
+          attributes: ["address", "isPair"],
+        });
+        rows.forEach((c) => _contractCache.set(c.address, c.isPair));
+        known.push(...needDb.filter((a) => _contractCache.get(a) === true));
+      }
+
+      const unknown = notFromTrace.filter(
+        (a) => _contractCache.get(a) !== true && _contractCache.get(a) !== false,
+      );
 
       if (unknown.length > 0) {
         const results = await batchRpc(
@@ -80,13 +105,14 @@ async function processTx(tx, txData) {
         await Promise.all(
           unknown.map((addr, i) => {
             const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+            _contractCache.set(addr, isPair);
             return Contract.upsert({ address: addr, isPair });
           }),
         );
         known.push(...unknown.filter((_, i) => !!(results[i] && results[i] !== "0x" && results[i].length >= 194)));
       }
 
-      return known;
+      return [...fromTrace, ...known];
     })();
 
     const now = new Date();
@@ -97,6 +123,7 @@ async function processTx(tx, txData) {
         `https://bscscan.com/tx/${tx.hash}`,
         symbol,
         isCallInput ? "YES" : "",
+        getReservesAddrs.size > 0 ? "YES" : "",
         swapPairWallets.length > 0 ? "YES" : "",
         selector ?? "",
         tx.blockNumber,
