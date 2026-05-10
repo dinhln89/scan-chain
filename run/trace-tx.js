@@ -31,23 +31,24 @@ async function processTx(tx, txData) {
       tx.blockNumber,
     );
     const now = new Date();
-    await append(
-      [
+    if (simulatorNotRevert) {
+      await append(
         [
-          tx.hash,
-          `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-          `https://bscscan.com/tx/${tx.hash}`,
-          tokenSymbolList,
-          "YES",
-          selector ?? "",
-          tx.blockNumber,
-          now.toLocaleString(),
-          hasV3Path ? "v3Path" : "",
-          simulatorNotRevert ? "OK" : "SIM_REVERT",
+          [
+            tx.hash,
+            `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
+            `https://bscscan.com/tx/${tx.hash}`,
+            tokenSymbolList,
+            "YES",
+            selector ?? "",
+            tx.blockNumber,
+            now.toLocaleString(),
+            hasV3Path ? "v3Path" : "",
+          ],
         ],
-      ],
-      { sheet: "Sheet4" },
-    );
+        { sheet: "Sheet4" },
+      );
+    }
   }
 
   if (isTransferSender) {
