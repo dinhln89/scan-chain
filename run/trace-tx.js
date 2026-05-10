@@ -1,7 +1,6 @@
 const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
-const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
@@ -89,15 +88,6 @@ async function processTx(tx, txData) {
 
       return known;
     })();
-
-    // await ReviewTx.upsert({
-    //   txHash: tx.hash,
-    //   address: tx.to.toLowerCase(),
-    //   selector,
-    //   isCallInput,
-    //   isGetReserves: getReservesAddrs.size > 0,
-    //   isBalanceOf: balanceOfAddrs.size > 0,
-    // });
 
     const now = new Date();
     await append([
