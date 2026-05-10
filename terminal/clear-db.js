@@ -3,11 +3,15 @@ require("dotenv").config({
 });
 
 const sequelize = require("../db");
+const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
 const Setting = require("../models/Setting");
 
 async function main() {
   await sequelize.sync();
+
+  await Contract.destroy({ where: {}, truncate: true });
+  console.log("Xoa Contract xong");
 
   await Transaction.destroy({ where: {}, truncate: true });
   console.log("Xoa Transaction xong");
