@@ -110,7 +110,6 @@ async function processBlock() {
   }
 
   await Setting.set("latest_block", nextBlock.toString());
-  log.info(`Cap nhat len: ${nextBlock}`);
   return true;
 }
 
