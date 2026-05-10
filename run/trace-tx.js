@@ -1,7 +1,7 @@
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
-const { analyzeTx, simulateTx, batchRpc } = require("../core/trace");
+const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -16,14 +16,16 @@ async function processTx(tx, txData) {
     isTransferSender,
     isTransferFromErc20,
     selector,
-    tokenSymbols,
   } = await analyzeTx(tx.hash, txData);
 
-  const tokenSymbolList = Object.values(tokenSymbols)
-    .filter(Boolean)
-    .join(", ");
-
   if (!isTransferFromErc20 && !isTransferSender) return;
+
+  const firstToSender = transfers.find(
+    (t) => t.to.toLowerCase() === tx.from.toLowerCase(),
+  );
+  const symbol = firstToSender
+    ? (await getErc20Symbol(firstToSender.token) || "")
+    : "";
 
   const { notRevert: simulatorNotRevert } = await simulateTx(
     tx.to,
@@ -40,7 +42,7 @@ async function processTx(tx, txData) {
             tx.hash,
             `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
             `https://bscscan.com/tx/${tx.hash}`,
-            tokenSymbolList,
+            symbol,
             "YES",
             selector ?? "",
             tx.blockNumber,
@@ -53,16 +55,6 @@ async function processTx(tx, txData) {
   }
 
   if (isTransferSender) {
-    const getReservesAddrs = new Set(
-      calls
-        .filter((c) => c.fn === "getReserves()")
-        .map((c) => c.to?.toLowerCase()),
-    );
-    const balanceOfAddrs = new Set(
-      calls
-        .filter((c) => c.fn === "balanceOf(address)")
-        .map((c) => c.to?.toLowerCase()),
-    );
     const balanceOfWallets = [
       ...new Set(
         calls
@@ -73,19 +65,15 @@ async function processTx(tx, txData) {
 
     const swapPairWallets = await (async () => {
       if (balanceOfWallets.length === 0) return [];
-      const known = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
-      const unknown = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
-      if (unknown.length === 0) return known;
       const results = await batchRpc(
-        unknown.map((addr) => ({
+        balanceOfWallets.map((addr) => ({
           method: "eth_call",
           params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
         })),
       );
-      const confirmed = unknown.filter(
+      return balanceOfWallets.filter(
         (_, i) => results[i] && results[i] !== "0x" && results[i].length >= 194,
       );
-      return [...known, ...confirmed];
     })();
 
     // await ReviewTx.upsert({
@@ -103,9 +91,8 @@ async function processTx(tx, txData) {
         tx.hash,
         `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
         `https://bscscan.com/tx/${tx.hash}`,
-        tokenSymbolList,
+        symbol,
         isCallInput ? "YES" : "",
-        getReservesAddrs.size > 0 ? "YES" : "",
         swapPairWallets.length > 0 ? "YES" : "",
         selector ?? "",
         tx.blockNumber,
@@ -124,7 +111,7 @@ const IGNORED_ERRORS = new Set([
   "IGNORED_V3_PATH",
 ]);
 
-const PARALLEL = 5;
+const PARALLEL = 3;
 
 async function processOne(tx) {
   try {

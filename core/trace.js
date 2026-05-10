@@ -310,9 +310,7 @@ async function analyzeTx(txHash, txData = null) {
     ),
   ];
 
-  // Round 2: fetch trace; batch symbol lookups only when needed
   let calls = [];
-  let tokenSymbols = {};
   let isCallInput = false;
 
   const trace = await rpc("debug_traceTransaction", [
@@ -330,8 +328,6 @@ async function analyzeTx(txHash, txData = null) {
   });
 
   if (isTransferSender) {
-    tokenSymbols = await batchGetErc20Symbols(tokensSentToSender);
-
     const callAddrs = calls.map((c) => c.to?.toLowerCase());
     if (callAddrs.includes(sender) || callAddrs.some((a) => inputSet.has(a))) {
       isCallInput = true;
@@ -353,7 +349,6 @@ async function analyzeTx(txHash, txData = null) {
     isTransferFromErc20,
     isTransferSender,
     selector,
-    tokenSymbols,
     transfers,
     txHash,
   };
