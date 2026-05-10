@@ -25,7 +25,7 @@ async function main() {
   console.log("block   :", tx.blockNumber);
   console.log("=".repeat(60));
 
-  const { notRevert, result, error } = await simulateTx(tx.to, tx.input, parseInt(tx.blockNumber, 16));
+  const { notRevert, result, error } = await simulateTx(tx.to, tx.input);
   console.log("\nsimulatorNotRevert:", notRevert);
   if (result) console.log("result            :", result);
   if (error)  console.log("error             :", error);

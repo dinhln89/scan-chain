@@ -27,13 +27,8 @@ async function processTx(tx, txData) {
     ? (await getErc20Symbol(firstToSender.token) || "")
     : "";
 
-  const { notRevert: simulatorNotRevert } = await simulateTx(
-    tx.to,
-    tx.input,
-    tx.blockNumber,
-  );
-
   if (isTransferFromErc20) {
+    const { notRevert: simulatorNotRevert } = await simulateTx(tx.to, tx.input);
     const now = new Date();
     if (simulatorNotRevert) {
       await append(
@@ -97,7 +92,6 @@ async function processTx(tx, txData) {
         selector ?? "",
         tx.blockNumber,
         now.toLocaleString(),
-        simulatorNotRevert ? "OK" : "",
       ],
     ]);
   }

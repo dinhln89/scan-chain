@@ -350,14 +350,11 @@ async function analyzeTx(txHash, txData = null) {
 
 const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
 
-async function simulateTx(to, input, blockNumber) {
-  const blockRef = blockNumber
-    ? "0x" + (parseInt(blockNumber, 10) - 1).toString(16)
-    : "latest";
+async function simulateTx(to, input) {
   try {
     const result = await rpc("eth_call", [
       { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: "0x5F5E100" },
-      blockRef,
+      "latest",
     ]);
     return { error: null, notRevert: true, result: result || null };
   } catch (err) {
