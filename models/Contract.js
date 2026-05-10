@@ -24,6 +24,11 @@ const Contract = sequelize.define(
       allowNull: false,
       defaultValue: false,
     },
+    isPair: {
+      type: DataTypes.BOOLEAN,
+      allowNull: true,
+      defaultValue: null,
+    },
     url: {
       type: DataTypes.STRING(1000),
       allowNull: false,

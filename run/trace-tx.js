@@ -1,4 +1,5 @@
 const sequelize = require("../db");
+const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
 const ReviewTx = require("../models/ReviewTx");
 const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
@@ -60,15 +61,33 @@ async function processTx(tx, txData) {
 
     const swapPairWallets = await (async () => {
       if (balanceOfWallets.length === 0) return [];
-      const results = await batchRpc(
-        balanceOfWallets.map((addr) => ({
-          method: "eth_call",
-          params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
-        })),
-      );
-      return balanceOfWallets.filter(
-        (_, i) => results[i] && results[i] !== "0x" && results[i].length >= 194,
-      );
+
+      const contracts = await Contract.findAll({
+        where: { address: balanceOfWallets },
+        attributes: ["address", "isPair"],
+      });
+      const cached = new Map(contracts.map((c) => [c.address, c.isPair]));
+
+      const known = balanceOfWallets.filter((a) => cached.get(a) === true);
+      const unknown = balanceOfWallets.filter((a) => cached.get(a) === null || cached.get(a) === undefined);
+
+      if (unknown.length > 0) {
+        const results = await batchRpc(
+          unknown.map((addr) => ({
+            method: "eth_call",
+            params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
+          })),
+        );
+        await Promise.all(
+          unknown.map((addr, i) => {
+            const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+            return Contract.upsert({ address: addr, isPair });
+          }),
+        );
+        known.push(...unknown.filter((_, i) => !!(results[i] && results[i] !== "0x" && results[i].length >= 194)));
+      }
+
+      return known;
     })();
 
     // await ReviewTx.upsert({
