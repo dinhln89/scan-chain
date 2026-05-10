@@ -1,44 +1,41 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="vi">
-<head>
-  <meta charset="UTF-8" />
-  <title>analyzeTx — RPC Flow</title>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-  <style>
-    body { background: #1e1e2e; display: flex; justify-content: center; padding: 40px; margin: 0; }
-    .mermaid { background: #fff; border-radius: 12px; padding: 32px; max-width: 900px; width: 100%; }
-  </style>
-</head>
-<body>
-  <div class="mermaid">
-flowchart TD
-    START([processTx]) --> A1
-
-    subgraph Round1["⚡ Round 1 — parallel"]
-        A1[eth_getTransactionReceipt]
-        A2[eth_getTransactionByHash]
-    end
-
-    A1 & A2 --> B{transfers.length == 0?}
-    B -- YES --> E1([throw NO_ERC20_TRANSFER])
-    B -- NO --> C{ignoredMethod\nignoreAddress?}
-    C -- YES --> E2([throw IGNORED_METHOD\nIGNORED_ADDRESS])
-    C -- NO --> D{matchedTos == 0?}
-    D -- YES --> E3([throw NO_ERC20_TRANSFER])
-    D -- NO --> F{isTransferSender?}
-
-    F -- NO --> R1([return\ncalls empty\ntokenSymbols empty])
-
-    F -- YES --> G
-
-    subgraph Round2["⚡ Round 2 — parallel"]
-        G[debug_traceTransaction]
-        G2[batchGetErc20Symbols\n1 HTTP request]
-    end
-
-    G & G2 --> H[extractCalls\ndecodeReserves / balanceOf\ncompute isCallInput]
-    H --> R2([return result])
-  </div>
-  <script>mermaid.initialize({ startOnLoad: true, theme: "default" });</script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>analyzeTx — RPC Flow</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <style>
+      body {
+        background: #1e1e2e;
+        display: flex;
+        justify-content: center;
+        padding: 40px;
+        margin: 0;
+      }
+      .mermaid {
+        background: #fff;
+        border-radius: 12px;
+        padding: 32px;
+        max-width: 900px;
+        width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="mermaid">
+      flowchart TD START([processTx]) --> A1 subgraph Round1["⚡ Round 1 —
+      parallel"] A1[eth_getTransactionReceipt] A2[eth_getTransactionByHash] end
+      A1 & A2 --> B{transfers.length == 0?} B -- YES --> E1([throw
+      NO_ERC20_TRANSFER]) B -- NO --> C{ignoredMethod\nignoreAddress?} C -- YES
+      --> E2([throw IGNORED_METHOD\nIGNORED_ADDRESS]) C -- NO --> D{matchedTos
+      == 0?} D -- YES --> E3([throw NO_ERC20_TRANSFER]) D -- NO -->
+      F{isTransferSender?} F -- NO --> R1([return\ncalls empty\ntokenSymbols
+      empty]) F -- YES --> G subgraph Round2["⚡ Round 2 — parallel"]
+      G[debug_traceTransaction] end G & G2 --> H[extractCalls\ndecodeReserves /
+      balanceOf\ncompute isCallInput] H --> R2([return result])
+    </div>
+    <script>
+      mermaid.initialize({ startOnLoad: true, theme: "default" });
+    </script>
+  </body>
 </html>

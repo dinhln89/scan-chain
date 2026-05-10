@@ -246,21 +246,6 @@ async function getErc20Symbol(tokenAddress) {
   return symbol;
 }
 
-async function batchGetErc20Symbols(tokenAddresses) {
-  const results = await batchRpc(
-    tokenAddresses.map((addr) => ({
-      method: "eth_call",
-      params: [{ to: addr, data: "0x95d89b41" }, "latest"],
-    })),
-  );
-  return Object.fromEntries(
-    tokenAddresses.map((addr, i) => [
-      addr,
-      decodeErc20StringResult(results[i]),
-    ]),
-  );
-}
-
 // txData co the truyen tu DB de bo qua eth_getTransactionByHash
 async function analyzeTx(txHash, txData = null) {
   const [receipt, fetchedTx] = await Promise.all([
@@ -382,7 +367,6 @@ async function simulateTx(to, input, blockNumber) {
 
 module.exports = {
   analyzeTx,
-  batchGetErc20Symbols,
   batchRpc,
   decodeTransfers,
   extractAddressesFromInput,

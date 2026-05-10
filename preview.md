@@ -18,7 +18,6 @@ START([processTx]) --> A1
 
     F -- "YES" --> subgraph Round2["⚡ Round 2 — parallel"]
         G1[debug_traceTransaction]
-        G2[batchGetErc20Symbols\n1 HTTP request]
     end
 
     G1 & G2 --> H[extractCalls\ndecodeReserves / balanceOf\ncompute isCallInput]
