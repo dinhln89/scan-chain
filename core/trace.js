@@ -229,12 +229,27 @@ async function getErc20Name(tokenAddress) {
   return decodeErc20StringResult(result);
 }
 
+const Token = require("../models/Token");
+const _symbolCache = new Map();
+
 async function getErc20Symbol(tokenAddress) {
+  const addr = tokenAddress.toLowerCase();
+  if (_symbolCache.has(addr)) return _symbolCache.get(addr);
+
+  const cached = await Token.findByPk(addr);
+  if (cached) {
+    _symbolCache.set(addr, cached.symbol);
+    return cached.symbol;
+  }
+
   const result = await rpc("eth_call", [
-    { to: tokenAddress, data: "0x95d89b41" },
+    { to: addr, data: "0x95d89b41" },
     "latest",
   ]);
-  return decodeErc20StringResult(result);
+  const symbol = decodeErc20StringResult(result);
+  await Token.upsert({ address: addr, symbol });
+  _symbolCache.set(addr, symbol);
+  return symbol;
 }
 
 async function batchGetErc20Symbols(tokenAddresses) {
