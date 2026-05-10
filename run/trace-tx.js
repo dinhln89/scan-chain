@@ -17,7 +17,6 @@ async function processTx(tx, txData) {
     isTransferFromErc20,
     selector,
     tokenSymbols,
-    hasV3Path,
   } = await analyzeTx(tx.hash, txData);
 
   const tokenSymbolList = Object.values(tokenSymbols)
@@ -85,7 +84,7 @@ async function processTx(tx, txData) {
         selector ?? "",
         tx.blockNumber,
         now.toLocaleString(),
-        hasV3Path ? "v3Path" : "",
+        simulatorNotRevert ? "OK" : "SIM_FAIL",
       ],
     ]);
   }

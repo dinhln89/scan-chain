@@ -66,7 +66,6 @@ async function main() {
   console.log("isTransferSender   :", isTransferSender);
   console.log("isTransferFromErc20:", isTransferFromErc20);
   console.log("hasSignature       :", hasSignature);
-  console.log("hasV3Path          :", hasV3Path);
   console.log("tokenSymbols       :", tokenSymbolList || "(none)");
   console.log("=".repeat(60));
 }
