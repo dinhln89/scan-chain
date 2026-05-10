@@ -337,16 +337,16 @@ async function analyzeTx(txHash, txData = null) {
   });
 
   return {
-    txHash,
     addresses,
     calls,
-    transfers,
+    hasSignature: hasSignatureInInput(tx.input),
     isCallInput,
-    isTransferSender,
     isTransferFromErc20,
+    isTransferSender,
     selector,
     tokenSymbols,
-    hasSignature: hasSignatureInInput(tx.input),
+    transfers,
+    txHash,
   };
 }
 
@@ -361,9 +361,9 @@ async function simulateTx(to, input, blockNumber) {
       { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: "0x5F5E100" },
       blockRef,
     ]);
-    return { notRevert: true, result: result || null, error: null };
+    return { error: null, notRevert: true, result: result || null };
   } catch (err) {
-    return { notRevert: false, result: null, error: err.message };
+    return { error: err.message, notRevert: false, result: null };
   }
 }
 
