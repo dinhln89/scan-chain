@@ -112,6 +112,7 @@ const IGNORED_ERRORS = new Set([
 ]);
 
 const PARALLEL = 3;
+const STAGGER_MS = 400;
 
 async function processOne(tx) {
   try {
@@ -139,7 +140,14 @@ async function processNext() {
 
   if (txs.length === 0) return;
 
-  await Promise.all(txs.map((tx) => processOne(tx)));
+  await Promise.all(
+    txs.map(
+      (tx, i) =>
+        new Promise((r) => setTimeout(r, i * STAGGER_MS)).then(() =>
+          processOne(tx),
+        ),
+    ),
+  );
 }
 
 async function main() {
