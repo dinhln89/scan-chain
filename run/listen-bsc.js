@@ -1,14 +1,14 @@
 const { Web3 } = require("web3");
-const sequelize = require("./db");
-const Setting = require("./models/Setting");
-const Transaction = require("./models/Transaction");
-const Contract = require("./models/Contract");
-const IgnoreAddress = require("./core/ignore-address");
-const IgnoreMethod = require("./core/ignore-method");
-const { hasV3PathInInput, hasSignatureInInput } = require("./core/trace");
-const { sendMessage } = require("./core/telegram");
-const { createLogger } = require("./core/logger");
-require("dotenv").config();
+const sequelize = require("../db");
+const Setting = require("../models/Setting");
+const Transaction = require("../models/Transaction");
+const Contract = require("../models/Contract");
+const IgnoreAddress = require("../core/ignore-address");
+const IgnoreMethod = require("../core/ignore-method");
+const { hasV3PathInInput, hasSignatureInInput } = require("../core/trace");
+const { sendMessage } = require("../core/telegram");
+const { createLogger } = require("../core/logger");
+require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
 const log = createLogger(__filename);
 
