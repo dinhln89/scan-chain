@@ -116,34 +116,43 @@ async function processTx(tx, txData) {
   }
 }
 
-async function processNext() {
-  const tx = await Transaction.findOne({
-    where: { processed: false },
-    order: [
-      ["blockNumber", "ASC"],
-      ["id", "ASC"],
-    ],
-  });
+const IGNORED_ERRORS = new Set([
+  "NO_ERC20_TRANSFER",
+  "IGNORED_METHOD",
+  "IGNORED_ADDRESS",
+  "IGNORED_SIGN",
+  "IGNORED_V3_PATH",
+]);
 
-  if (!tx) return;
+const PARALLEL = 5;
 
+async function processOne(tx) {
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
     log.info(`DONE: https://bscscan.com/tx/${tx.hash}`);
   } catch (err) {
-    if (
-      err.message === "NO_ERC20_TRANSFER" ||
-      err.message === "IGNORED_METHOD" ||
-      err.message === "IGNORED_ADDRESS" ||
-      err.message === "IGNORED_SIGN" ||
-      err.message === "IGNORED_V3_PATH"
-    ) {
+    if (IGNORED_ERRORS.has(err.message)) {
       await tx.update({ processed: true });
     } else {
       log.error(`Loi tx ${tx.hash}: ${err.message}`);
     }
   }
+}
+
+async function processNext() {
+  const txs = await Transaction.findAll({
+    where: { processed: false },
+    order: [
+      ["blockNumber", "ASC"],
+      ["id", "ASC"],
+    ],
+    limit: PARALLEL,
+  });
+
+  if (txs.length === 0) return;
+
+  await Promise.all(txs.map((tx) => processOne(tx)));
 }
 
 async function main() {
