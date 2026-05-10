@@ -23,6 +23,8 @@ async function processTx(tx, txData) {
     .filter(Boolean)
     .join(", ");
 
+  if (!isTransferFromErc20 && !isTransferSender) return;
+
   const { notRevert: simulatorNotRevert } = await simulateTx(
     tx.to,
     tx.input,
