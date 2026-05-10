@@ -125,11 +125,20 @@ function hasSignatureInInput(input) {
   for (let i = 0; i + 64 <= data.length; i += 64) {
     const chunk = data.slice(i, i + 64);
 
-    // Format 1: packed 65-byte bytes (length = 0x41)
+    // Format 1: packed 65-byte bytes (length = 0x41) → r(32)+s(32)+v(1)
     if (chunk === "0000000000000000000000000000000000000000000000000000000000000041") {
       const sigStart = i + 64;
       if (sigStart + 130 > data.length) continue;
       const v = parseInt(data.slice(sigStart + 128, sigStart + 130), 16);
+      if (v === 0x1b || v === 0x1c) return true;
+    }
+
+    // Format 3: ERC-4337 66-byte bytes (length = 0x42) → 0x00+r(32)+s(32)+v(1)
+    if (chunk === "0000000000000000000000000000000000000000000000000000000000000042") {
+      const sigStart = i + 64;
+      if (sigStart + 132 > data.length) continue;
+      if (data.slice(sigStart, sigStart + 2) !== "00") continue;
+      const v = parseInt(data.slice(sigStart + 130, sigStart + 132), 16);
       if (v === 0x1b || v === 0x1c) return true;
     }
 

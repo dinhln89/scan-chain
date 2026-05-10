@@ -108,7 +108,7 @@ async function processTx(tx, txData) {
         selector ?? "",
         tx.blockNumber,
         now.toLocaleString(),
-        simulatorNotRevert ? "OK" : "SIM_FAIL",
+        simulatorNotRevert ? "OK" : "",
       ],
     ]);
   }
@@ -125,7 +125,6 @@ async function processNext() {
 
   if (!tx) return;
 
-  log.info(`Xu ly tx: ${tx.hash}`);
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
@@ -139,7 +138,6 @@ async function processNext() {
       err.message === "IGNORED_V3_PATH"
     ) {
       await tx.update({ processed: true });
-      log.info(`Bo qua tx ${tx.hash}: ${err.message}`);
     } else {
       log.error(`Loi tx ${tx.hash}: ${err.message}`);
     }
