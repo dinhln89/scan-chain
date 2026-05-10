@@ -21,7 +21,7 @@ async function main() {
 
   // Drop va recreate tat ca index
   const qi = sequelize.getQueryInterface();
-  const tables = ["transactions", "settings"];
+  const tables = ["transactions", "settings", "contracts"];
   for (const table of tables) {
     try {
       const indexes = await qi.showIndex(table);
