@@ -107,7 +107,6 @@ async function processBlock() {
       });
       await contract.increment("txCount");
     }
-    log.info(`Saved: ${tx.hash} -> ${tx.to?.toLowerCase()}`);
   }
 
   await Setting.set("latest_block", nextBlock.toString());
