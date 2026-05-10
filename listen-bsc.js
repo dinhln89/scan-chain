@@ -51,8 +51,6 @@ async function processBlock() {
   const nextBlock = savedBlock + 1n;
   const block = await web3.eth.getBlock(nextBlock, true);
   const txHashes = block.transactions;
-  log.info(`Block ${nextBlock}: ${txHashes.length} tx`);
-
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
   const ignoredSet = IgnoreAddress.getAll();
@@ -75,15 +73,11 @@ async function processBlock() {
     );
   });
 
-  log.info(
-    `Co input data: ${withInput.length} tx, sau khi loc: ${filtered.length} tx`,
-  );
+  if (filtered.length > 0)
+    log.info(`Block ${nextBlock}: ${filtered.length}/${txHashes.length} tx`);
 
   for (const tx of filtered) {
-    if (tx.input.length > 5000) {
-      log.info(`Bo qua tx co input qua lon: ${tx.hash}`);
-      continue;
-    }
+    if (tx.input.length > 5000) continue;
 
     const selector = tx.input?.slice(0, 10)?.toLowerCase() || null;
     if (selector && tx.to) {
@@ -113,7 +107,7 @@ async function processBlock() {
       });
       await contract.increment("txCount");
     }
-    log.info(`Saved: ${tx.hash}`);
+    log.info(`Saved: ${tx.hash} -> ${tx.to?.toLowerCase()}`);
   }
 
   await Setting.set("latest_block", nextBlock.toString());
