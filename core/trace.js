@@ -240,6 +240,7 @@ function makeCache(max = 5000) {
       if (map.size >= max) map.delete(map.keys().next().value);
       map.set(k, v);
     },
+    clear: () => map.clear(),
   };
 }
 
@@ -363,6 +364,7 @@ async function analyzeTx(txHash, txData = null) {
     isTransferFromErc20,
     isTransferSender,
     selector,
+    transactionIndex: receipt.transactionIndex,
     transfers,
     txHash,
   };
@@ -370,11 +372,17 @@ async function analyzeTx(txHash, txData = null) {
 
 const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
 
-async function simulateTx(to, input) {
+async function simulateTx(to, input, blockNumber, txIndex) {
+  const block =
+    blockNumber != null && txIndex != null
+      ? { blockNumber: "0x" + Number(blockNumber).toString(16), transactionIndex: "0x" + Number(txIndex).toString(16) }
+      : blockNumber != null
+        ? "0x" + Number(blockNumber).toString(16)
+        : "latest";
   try {
     const result = await rpc("eth_call", [
       { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: "0x5F5E100" },
-      "latest",
+      block,
     ]);
     return { error: null, notRevert: true, result: result || null };
   } catch (err) {
@@ -397,4 +405,5 @@ module.exports = {
   rpc,
   setRpcHandler,
   simulateTx,
+  tokenCache: _tokenCache,
 };

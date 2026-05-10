@@ -111,6 +111,7 @@ async function processBlock() {
     await Transaction.upsert({
       hash: tx.hash,
       blockNumber: Number(nextBlock),
+      transactionIndex: tx.transactionIndex != null ? Number(tx.transactionIndex) : null,
       from: tx.from,
       to: tx.to || null,
       value: tx.value.toString(),

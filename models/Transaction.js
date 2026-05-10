@@ -17,6 +17,10 @@ const Transaction = sequelize.define(
       type: DataTypes.BIGINT,
       allowNull: false,
     },
+    transactionIndex: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     from: {
       type: DataTypes.STRING(42),
       allowNull: false,
