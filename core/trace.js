@@ -116,20 +116,33 @@ function hasV3PathInInput(input) {
   return false;
 }
 
-// Detect 65-byte ECDSA signature (r+s+v) in ABI-encoded input
+// Detect ECDSA signature in ABI-encoded input (2 formats):
+// 1. Packed 65-byte bytes: length=0x41, then r(32)+s(32)+v(1)
+// 2. ABI-separated: v as uint256 word (0x1b/0x1c), preceded by r and s (non-zero first bytes)
 function hasSignatureInInput(input) {
   if (!input || input.length < 10) return false;
   const data = input.slice(10).toLowerCase();
   for (let i = 0; i + 64 <= data.length; i += 64) {
     const chunk = data.slice(i, i + 64);
-    if (
-      chunk ===
-      "0000000000000000000000000000000000000000000000000000000000000041"
-    ) {
+
+    // Format 1: packed 65-byte bytes (length = 0x41)
+    if (chunk === "0000000000000000000000000000000000000000000000000000000000000041") {
       const sigStart = i + 64;
       if (sigStart + 130 > data.length) continue;
       const v = parseInt(data.slice(sigStart + 128, sigStart + 130), 16);
       if (v === 0x1b || v === 0x1c) return true;
+    }
+
+    // Format 2: ABI-separated v word (uint256 = 27 or 28)
+    if (
+      chunk === "000000000000000000000000000000000000000000000000000000000000001b" ||
+      chunk === "000000000000000000000000000000000000000000000000000000000000001c"
+    ) {
+      if (i < 128) continue; // can't have r and s before this
+      const r = data.slice(i - 128, i - 64);
+      const s = data.slice(i - 64, i);
+      // r and s first byte must be non-zero (high-entropy, not a padded address/number)
+      if (r.slice(0, 2) !== "00" && s.slice(0, 2) !== "00") return true;
     }
   }
   return false;
