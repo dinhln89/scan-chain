@@ -34,6 +34,21 @@ const BSC_RPC =
 
 const web3 = new Web3(BSC_RPC);
 
+const stats = { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
+
+function flushStats() {
+  const now = Date.now();
+  if (now - stats.lastLog >= 5000 && stats.blocks > 0) {
+    log.info(`Block ${stats.fromBlock}-${stats.toBlock} | ${stats.filtered}/${stats.total} tx saved`);
+    stats.blocks = 0;
+    stats.filtered = 0;
+    stats.total = 0;
+    stats.fromBlock = null;
+    stats.toBlock = null;
+    stats.lastLog = now;
+  }
+}
+
 // tra ve true neu co block moi duoc xu ly
 async function processBlock() {
   const chainBlock = await web3.eth.getBlockNumber();
@@ -73,8 +88,12 @@ async function processBlock() {
     );
   });
 
-  if (filtered.length > 0)
-    log.info(`Block ${nextBlock}: ${filtered.length}/${txHashes.length} tx`);
+  stats.blocks++;
+  stats.total += txHashes.length;
+  stats.filtered += filtered.length;
+  if (stats.fromBlock === null) stats.fromBlock = nextBlock.toString();
+  stats.toBlock = nextBlock.toString();
+  flushStats();
 
   for (const tx of filtered) {
     if (tx.input.length > 5000) continue;
