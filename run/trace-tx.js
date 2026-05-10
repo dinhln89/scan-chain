@@ -78,7 +78,7 @@ async function processTx(tx, txData) {
         `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
         `https://bscscan.com/tx/${tx.hash}`,
         tokenSymbolList,
-        isCallInput ? "YES" : "NO",
+        isCallInput ? "YES" : "",
         getReservesAddrs.size > 0 ? "YES" : "",
         balanceOfAddrs.size > 0 ? "YES" : "",
         selector ?? "",
