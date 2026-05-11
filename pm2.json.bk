@@ -6,7 +6,7 @@
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "1G",
-            "cron_restart": "*/20 * * * *"
+            "cron_restart": "*/40 * * * *"
         },
         {
             "name": "trace-tx",
@@ -14,7 +14,7 @@
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "1G",
-            "cron_restart": "*/21 * * * *"
+            "cron_restart": "*/41 * * * *"
         }
     ]
 }
