@@ -138,6 +138,8 @@ async function processOne(tx) {
   } catch (err) {
     if (IGNORED_ERRORS.has(err.message)) {
       await tx.update({ processed: true });
+    } else if (err.message?.toLowerCase().includes("revert")) {
+      // bo qua
     } else {
       log.error(`Loi tx ${tx.hash}: ${err.message}`);
     }
