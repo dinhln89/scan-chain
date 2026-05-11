@@ -4,6 +4,7 @@ require("dotenv").config({
 
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
+const { sendMessage } = require("./telegram");
 
 const ignoreSwap = {
   "0x8803dbee":
@@ -386,6 +387,9 @@ async function simulateTx(to, input, blockNumber, txIndex) {
     ]);
     return { error: null, notRevert: true, result: result || null };
   } catch (err) {
+    if (!err.message?.toLowerCase().includes("revert")) {
+      sendMessage(`❌ simulateTx error\n<code>${to}</code>\n${err.message}`);
+    }
     return { error: err.message, notRevert: false, result: null };
   }
 }
