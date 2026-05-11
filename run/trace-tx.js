@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
@@ -143,18 +144,26 @@ async function processOne(tx) {
   }
 }
 
-async function processNext() {
-  const tx = await Transaction.findOne({
-    where: { processed: false },
-    order: [
-      ["blockNumber", "ASC"],
-      ["id", "ASC"],
-    ],
+const CONCURRENCY = 5;
+const inFlight = new Set();
+
+async function scheduleBatch() {
+  const slots = CONCURRENCY - inFlight.size;
+  if (slots <= 0) return;
+
+  const where = { processed: false };
+  if (inFlight.size > 0) where.id = { [Op.notIn]: [...inFlight] };
+
+  const txs = await Transaction.findAll({
+    where,
+    order: [["blockNumber", "ASC"], ["id", "ASC"]],
+    limit: slots,
   });
 
-  if (!tx) return;
-
-  await processOne(tx);
+  for (const tx of txs) {
+    inFlight.add(tx.id);
+    processOne(tx).finally(() => inFlight.delete(tx.id));
+  }
 }
 
 async function main() {
@@ -164,7 +173,7 @@ async function main() {
 
   const loop = async () => {
     try {
-      await processNext();
+      await scheduleBatch();
     } catch (err) {
       log.error(`Loi: ${err.message}`);
     }
