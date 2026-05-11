@@ -207,9 +207,18 @@ async function processOne(tx) {
 const CONCURRENCY = 10;
 const inFlight = new Set();
 
+let scheduleLogAt = 0;
+
 async function scheduleBatch() {
   const slots = CONCURRENCY - inFlight.size;
   if (slots <= 0) return;
+
+  const now = Date.now();
+  const shouldLog = now - scheduleLogAt >= 10_000;
+  if (shouldLog) {
+    log.info(`scheduleBatch: slots=${slots} inFlight=${inFlight.size} — querying DB...`);
+    scheduleLogAt = now;
+  }
 
   const where = { processed: false };
   if (inFlight.size > 0) where.id = { [Op.notIn]: [...inFlight] };
@@ -222,6 +231,8 @@ async function scheduleBatch() {
     ],
     limit: slots,
   });
+
+  if (shouldLog) log.info(`scheduleBatch: found ${txs.length} tx`);
 
   for (const tx of txs) {
     inFlight.add(tx.id);
