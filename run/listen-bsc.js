@@ -51,7 +51,13 @@ function flushStats() {
 
 // tra ve true neu co block moi duoc xu ly
 async function processBlock() {
-  const chainBlock = await web3.eth.getBlockNumber();
+  let chainBlock;
+  try {
+    chainBlock = await web3.eth.getBlockNumber();
+  } catch (err) {
+    throw new Error(`[getBlockNumber] ${err.message}`);
+  }
+
   const stored = await Setting.get("latest_block");
   if (!stored) {
     await Setting.set("latest_block", chainBlock.toString());
@@ -64,7 +70,12 @@ async function processBlock() {
   if (savedBlock >= chainBlock) return false;
 
   const nextBlock = savedBlock + 1n;
-  const block = await web3.eth.getBlock(nextBlock, true);
+  let block;
+  try {
+    block = await web3.eth.getBlock(nextBlock, true);
+  } catch (err) {
+    throw new Error(`[getBlock #${nextBlock}] ${err.message}`);
+  }
   const txHashes = block.transactions;
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
@@ -149,6 +160,7 @@ async function main() {
       delay = hadBlock ? 100 : 500;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
+      if (err.stack) log.error(err.stack);
       delay = 2000;
     }
     setTimeout(loop, delay);
