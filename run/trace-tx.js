@@ -180,6 +180,7 @@ const MAX_RETRIES = 3;
 const retryCount = new Map();
 
 async function processOne(tx) {
+  log.info(`[${tx.hash.slice(0, 10)}] start`);
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
@@ -229,7 +230,9 @@ async function scheduleBatch() {
 }
 
 async function main() {
+  log.info("ensureDatabase...");
   await sequelize.ensureDatabase();
+  log.info("sync...");
   await sequelize.sync();
   log.info("Bat dau xu ly transactions...");
 
