@@ -51,7 +51,7 @@ async function main() {
   }
 
   await sequelize.ensureDatabase();
-  await sequelize.sync();
+  await sequelize.sync({ alter: true });
 
   const txData = await rpc("eth_getTransactionByHash", [txHash]);
   if (!txData) {
