@@ -188,7 +188,7 @@ async function processOne(tx) {
   }
 }
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
 const inFlight = new Set();
 
 async function scheduleBatch() {
@@ -224,7 +224,7 @@ async function main() {
     } catch (err) {
       log.error(`Loi: ${err.message}`);
     }
-    setTimeout(loop, 100);
+    setTimeout(loop, 50);
   };
 
   loop();

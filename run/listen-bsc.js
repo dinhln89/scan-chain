@@ -157,7 +157,7 @@ async function main() {
       const hadBlock = await processBlock();
       // co block moi: check ngay sau 100ms de bat kip block tiep theo
       // khong co gi: BSC ~3s/block, doi 500ms de tranh spam getBlockNumber
-      delay = hadBlock ? 100 : 500;
+      delay = hadBlock ? 500 : 2000;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
       if (err.stack) log.error(err.stack);
