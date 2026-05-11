@@ -68,13 +68,7 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   return [...fromTrace, ...known];
 }
 
-function ms(start) {
-  return `${Date.now() - start}ms`;
-}
-
 async function processTx(tx, txData) {
-  const t0 = Date.now();
-
   const {
     calls,
     transfers,
@@ -84,7 +78,6 @@ async function processTx(tx, txData) {
     selector,
     transactionIndex,
   } = await analyzeTx(tx.hash, txData);
-  log.info(`[${tx.hash.slice(0, 10)}] analyzeTx: ${ms(t0)}`);
 
   if (!isTransferFromErc20 && !isTransferSender) return;
 
@@ -105,7 +98,6 @@ async function processTx(tx, txData) {
     ),
   ];
 
-  const t1 = Date.now();
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
     firstToSender
       ? getErc20Symbol(firstToSender.token).then((s) => s || "")
@@ -122,12 +114,10 @@ async function processTx(tx, txData) {
       ? resolveSwapPairs(balanceOfWallets, getReservesAddrs)
       : Promise.resolve([]),
   ]);
-  log.info(`[${tx.hash.slice(0, 10)}] symbol+simulate+pairs: ${ms(t1)}`);
 
   const now = new Date();
 
   if (isTransferFromErc20 && simulateResult?.notRevert) {
-    const t2 = Date.now();
     await append(
       [
         [
@@ -143,11 +133,9 @@ async function processTx(tx, txData) {
       ],
       { sheet: "Sheet4" },
     );
-    log.info(`[${tx.hash.slice(0, 10)}] append Sheet4: ${ms(t2)}`);
   }
 
   if (isTransferSender) {
-    const t3 = Date.now();
     await append([
       [
         tx.hash,
@@ -162,10 +150,7 @@ async function processTx(tx, txData) {
         now.toLocaleString(),
       ],
     ]);
-    log.info(`[${tx.hash.slice(0, 10)}] append Sheet1: ${ms(t3)}`);
   }
-
-  log.info(`[${tx.hash.slice(0, 10)}] total: ${ms(t0)}`);
 }
 
 const IGNORED_ERRORS = new Set([
@@ -180,7 +165,6 @@ const MAX_RETRIES = 3;
 const retryCount = new Map();
 
 async function processOne(tx) {
-  log.info(`[${tx.hash.slice(0, 10)}] start`);
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
@@ -207,18 +191,9 @@ async function processOne(tx) {
 const CONCURRENCY = 10;
 const inFlight = new Set();
 
-let scheduleLogAt = 0;
-
 async function scheduleBatch() {
   const slots = CONCURRENCY - inFlight.size;
   if (slots <= 0) return;
-
-  const now = Date.now();
-  const shouldLog = now - scheduleLogAt >= 10_000;
-  if (shouldLog) {
-    log.info(`scheduleBatch: slots=${slots} inFlight=${inFlight.size} — querying DB...`);
-    scheduleLogAt = now;
-  }
 
   const where = { processed: false };
   if (inFlight.size > 0) where.id = { [Op.notIn]: [...inFlight] };
@@ -232,8 +207,6 @@ async function scheduleBatch() {
     limit: slots,
   });
 
-  if (shouldLog) log.info(`scheduleBatch: found ${txs.length} tx`);
-
   for (const tx of txs) {
     inFlight.add(tx.id);
     processOne(tx).finally(() => inFlight.delete(tx.id));
@@ -241,9 +214,7 @@ async function scheduleBatch() {
 }
 
 async function main() {
-  log.info("ensureDatabase...");
   await sequelize.ensureDatabase();
-  log.info("sync...");
   await sequelize.sync();
   log.info("Bat dau xu ly transactions...");
 
