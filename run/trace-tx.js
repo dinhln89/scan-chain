@@ -165,11 +165,13 @@ const MAX_RETRIES = 3;
 const retryCount = new Map();
 
 async function processOne(tx) {
+  const t0 = Date.now();
+  log.info(`TX ${tx.hash}`);
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
     retryCount.delete(tx.id);
-    log.info(`DONE: https://bscscan.com/tx/${tx.hash}`);
+    log.info(`DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
     if (IGNORED_ERRORS.has(err.message) || err.message?.toLowerCase().includes("revert")) {
       await tx.update({ processed: true });
