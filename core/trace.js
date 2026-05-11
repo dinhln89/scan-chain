@@ -258,11 +258,16 @@ async function getErc20Symbol(tokenAddress) {
     return cached.symbol;
   }
 
-  const result = await rpc("eth_call", [
-    { to: addr, data: "0x95d89b41" },
-    "latest",
-  ]);
-  const symbol = decodeErc20StringResult(result);
+  let symbol = null;
+  try {
+    const result = await rpc("eth_call", [
+      { to: addr, data: "0x95d89b41" },
+      "latest",
+    ]);
+    symbol = decodeErc20StringResult(result);
+  } catch {
+    // token reverts on symbol() — treat as null
+  }
   await Token.upsert({ address: addr, symbol });
   _tokenCache.set(addr, symbol);
   return symbol;
