@@ -161,23 +161,34 @@ const IGNORED_ERRORS = new Set([
   "IGNORED_V3_PATH",
 ]);
 
+const MAX_RETRIES = 3;
+const retryCount = new Map();
+
 async function processOne(tx) {
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
     await tx.update({ processed: true });
+    retryCount.delete(tx.id);
     log.info(`DONE: https://bscscan.com/tx/${tx.hash}`);
   } catch (err) {
-    if (IGNORED_ERRORS.has(err.message)) {
+    if (IGNORED_ERRORS.has(err.message) || err.message?.toLowerCase().includes("revert")) {
       await tx.update({ processed: true });
-    } else if (err.message?.toLowerCase().includes("revert")) {
-      // bo qua
+      retryCount.delete(tx.id);
+      return;
+    }
+    const count = (retryCount.get(tx.id) || 0) + 1;
+    if (count >= MAX_RETRIES) {
+      await tx.update({ processed: true });
+      retryCount.delete(tx.id);
+      log.warn(`Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`);
     } else {
-      log.error(`Loi tx ${tx.hash}: ${err.message}`);
+      retryCount.set(tx.id, count);
+      log.error(`Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`);
     }
   }
 }
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 5;
 const inFlight = new Set();
 
 async function scheduleBatch() {
