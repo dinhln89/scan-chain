@@ -10,7 +10,24 @@ require("../models/Token");
 require("../models/Transaction");
 require("../models/User");
 
+async function confirm(question) {
+  process.stdout.write(question);
+  return new Promise((resolve) => {
+    process.stdin.setEncoding("utf8");
+    process.stdin.once("data", (data) => {
+      process.stdin.destroy();
+      resolve(data.trim().toLowerCase() === "y");
+    });
+  });
+}
+
 async function main() {
+  const ok = await confirm("Xoa toan bo du lieu trong DB? (y/N): ");
+  if (!ok) {
+    console.log("Huy.");
+    return;
+  }
+
   await sequelize.sync();
 
   const tables = ["transactions", "contracts", "ignore_addresses", "settings", "tokens", "users"];
