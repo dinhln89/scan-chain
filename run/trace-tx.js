@@ -127,9 +127,6 @@ const IGNORED_ERRORS = new Set([
   "IGNORED_V3_PATH",
 ]);
 
-const PARALLEL = 3;
-const STAGGER_MS = 400;
-
 async function processOne(tx) {
   try {
     await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
@@ -147,25 +144,17 @@ async function processOne(tx) {
 }
 
 async function processNext() {
-  const txs = await Transaction.findAll({
+  const tx = await Transaction.findOne({
     where: { processed: false },
     order: [
       ["blockNumber", "ASC"],
       ["id", "ASC"],
     ],
-    limit: PARALLEL,
   });
 
-  if (txs.length === 0) return;
+  if (!tx) return;
 
-  await Promise.all(
-    txs.map(
-      (tx, i) =>
-        new Promise((r) => setTimeout(r, i * STAGGER_MS)).then(() =>
-          processOne(tx),
-        ),
-    ),
-  );
+  await processOne(tx);
 }
 
 async function main() {
