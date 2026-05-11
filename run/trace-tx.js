@@ -2,7 +2,12 @@ const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
-const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
+const {
+  analyzeTx,
+  batchRpc,
+  getErc20Symbol,
+  simulateTx,
+} = require("../core/trace");
 
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
@@ -15,15 +20,21 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   // Từ trace: chắc chắn là pair
   const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
   if (fromTrace.length > 0) {
-    await Promise.all(fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })));
+    await Promise.all(
+      fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })),
+    );
   }
 
   // Không từ trace: DB → RPC
   const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
 
-  const rows = notFromTrace.length > 0
-    ? await Contract.findAll({ where: { address: notFromTrace }, attributes: ["address", "isPair"] })
-    : [];
+  const rows =
+    notFromTrace.length > 0
+      ? await Contract.findAll({
+          where: { address: notFromTrace },
+          attributes: ["address", "isPair"],
+        })
+      : [];
   const dbMap = new Map(rows.map((c) => [c.address, c.isPair]));
 
   const known = notFromTrace.filter((a) => dbMap.get(a) === true);
@@ -38,11 +49,20 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
     );
     await Promise.all(
       unknown.map((addr, i) => {
-        const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+        const isPair = !!(
+          results[i] &&
+          results[i] !== "0x" &&
+          results[i].length >= 194
+        );
         return Contract.upsert({ address: addr, isPair });
       }),
     );
-    known.push(...unknown.filter((_, i) => !!(results[i] && results[i] !== "0x" && results[i].length >= 194)));
+    known.push(
+      ...unknown.filter(
+        (_, i) =>
+          !!(results[i] && results[i] !== "0x" && results[i].length >= 194),
+      ),
+    );
   }
 
   return [...fromTrace, ...known];
@@ -66,7 +86,9 @@ async function processTx(tx, txData) {
   );
 
   const getReservesAddrs = new Set(
-    calls.filter((c) => c.fn === "getReserves()").map((c) => c.to?.toLowerCase()),
+    calls
+      .filter((c) => c.fn === "getReserves()")
+      .map((c) => c.to?.toLowerCase()),
   );
   const balanceOfWallets = [
     ...new Set(
@@ -77,9 +99,20 @@ async function processTx(tx, txData) {
   ];
 
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
-    firstToSender ? getErc20Symbol(firstToSender.token).then((s) => s || "") : Promise.resolve(""),
-    isTransferFromErc20 ? simulateTx(tx.to, tx.input, tx.blockNumber, tx.transactionIndex ?? transactionIndex) : Promise.resolve(null),
-    isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
+    firstToSender
+      ? getErc20Symbol(firstToSender.token).then((s) => s || "")
+      : Promise.resolve(""),
+    isTransferFromErc20
+      ? simulateTx(
+          tx.to,
+          tx.input,
+          tx.blockNumber,
+          tx.transactionIndex ?? transactionIndex,
+        )
+      : Promise.resolve(null),
+    isTransferSender
+      ? resolveSwapPairs(balanceOfWallets, getReservesAddrs)
+      : Promise.resolve([]),
   ]);
 
   const now = new Date();
@@ -144,7 +177,7 @@ async function processOne(tx) {
   }
 }
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
 const inFlight = new Set();
 
 async function scheduleBatch() {
@@ -156,7 +189,10 @@ async function scheduleBatch() {
 
   const txs = await Transaction.findAll({
     where,
-    order: [["blockNumber", "ASC"], ["id", "ASC"]],
+    order: [
+      ["blockNumber", "ASC"],
+      ["id", "ASC"],
+    ],
     limit: slots,
   });
 
