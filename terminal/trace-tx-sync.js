@@ -3,7 +3,7 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
-const { processTxData, buildRow } = require("../core/trace-tx-process");
+const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 const { append, getRows } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -45,6 +45,7 @@ async function main() {
   console.log("[1/4] Ket noi DB...");
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await syncAll();
 
   console.log("[2/4] Doc Sheet1 va fetch DB...");
   const rows = await getRows({ sheet: "Sheet1" });
@@ -75,7 +76,10 @@ async function main() {
       await append(batch, { sheet: "Sheet5" });
       console.log(`  => Flushed ${batch.length} rows vao Sheet5 (tong: ${totalDone})`);
     } catch (err) {
-      console.log(`  => Flush ERROR: ${err.message}`);
+      // Tra batch lai vao pending, khong mat du lieu
+      pending.unshift(...batch);
+      totalDone -= batch.length;
+      console.log(`  => Flush ERROR (${batch.length} rows tra lai queue): ${err.message}`);
     }
     flushing = false;
   }

@@ -1,11 +1,21 @@
 const Contract = require("../models/Contract");
+const IgnoreMethod = require("./ignore-method");
 const {
   analyzeTx,
   batchRpc,
   extractAddressesFromInput,
   getErc20Symbol,
   simulateTx,
+  syncIgnoreSwapFromSheet,
 } = require("./trace");
+
+// Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
+async function syncAll() {
+  await IgnoreMethod.syncFromSheet();
+  await syncIgnoreSwapFromSheet();
+}
+
+module.exports.syncAll = syncAll;
 
 // Xác định địa chỉ nào trong balanceOfWallets là swap pair (LP pool).
 // Ưu tiên kết quả từ trace (getReserves), fallback sang DB rồi mới gọi RPC.
@@ -185,4 +195,4 @@ function buildRow(tx, result, { includeSimulate = false } = {}) {
   return row;
 }
 
-module.exports = { resolveSwapPairs, processTxData, buildRow };
+module.exports = { syncAll, resolveSwapPairs, processTxData, buildRow };

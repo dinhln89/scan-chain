@@ -4,13 +4,14 @@ require("dotenv").config({
 
 const sequelize = require("../db");
 const { rpc, extractAddressesFromInput } = require("../core/trace");
-const { processTxData, buildRow } = require("../core/trace-tx-process");
+const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 
 async function main() {
   const txHash = process.argv[2] || "0x6a4cdaf641bd1b0c5254cd33171e0a750b5cd88c8afa88264ff0d21a2969267a";
 
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await syncAll();
 
   console.log("\n[TX] Fetching:", txHash);
   const txData = await rpc("eth_getTransactionByHash", [txHash]);

@@ -1,8 +1,7 @@
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
-const { syncIgnoreSwapFromSheet } = require("../core/trace");
-const { processTxData, buildRow } = require("../core/trace-tx-process");
+const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
@@ -108,8 +107,8 @@ async function scheduleBatch() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
-  // Sync ignoreSwap từ sheet 1 lần duy nhất khi khởi động, không sync lại trong loop
-  await syncIgnoreSwapFromSheet();
+  // Sync tất cả ignore data từ sheet 1 lần khi khởi động
+  await syncAll();
   log.info("Bat dau xu ly transactions...");
 
   const loop = async () => {
