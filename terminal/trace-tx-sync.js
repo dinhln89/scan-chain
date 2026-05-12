@@ -56,9 +56,11 @@ async function reTraceTx(tx) {
   if (!isTransferFromErc20 && !isTransferSender) return null;
 
   const firstToSender = transfers.find((t) => t.to.toLowerCase() === tx.from.toLowerCase());
-  const getReservesAddrs = new Set(
-    calls.filter((c) => c.fn === "getReserves()").map((c) => c.to?.toLowerCase()),
-  );
+  const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
+  const getReservesAddrs = new Set(getReservesCalls.map((c) => c.to?.toLowerCase()));
+  const getReservesParentSelectors = [
+    ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
+  ];
   const balanceOfWallets = [
     ...new Set(calls.filter((c) => c.fn === "balanceOf(address)" && c.wallet).map((c) => c.wallet.toLowerCase())),
   ];
@@ -77,7 +79,7 @@ async function reTraceTx(tx) {
     `https://bscscan.com/tx/${tx.hash}`,
     symbol,
     isCallInput ? "YES" : "",
-    getReservesAddrs.size > 0 ? "YES" : "",
+    getReservesParentSelectors.join(","),
     swapPairWallets.length > 0 ? "YES" : "",
     isTransferFromErc20 && simulateResult?.notRevert ? "YES" : "",
     selector ?? "",
