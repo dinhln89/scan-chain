@@ -91,11 +91,11 @@ async function processTx(tx, txData) {
     (t) => t.to.toLowerCase() === tx.from.toLowerCase(),
   );
 
-  const getReservesAddrs = new Set(
-    calls
-      .filter((c) => c.fn === "getReserves()")
-      .map((c) => c.to?.toLowerCase()),
-  );
+  const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
+  const getReservesAddrs = new Set(getReservesCalls.map((c) => c.to?.toLowerCase()));
+  const getReservesParentSelectors = [
+    ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
+  ];
   const balanceOfWallets = [
     ...new Set(
       calls
@@ -152,7 +152,7 @@ async function processTx(tx, txData) {
         `https://bscscan.com/tx/${tx.hash}`,
         symbol,
         isCallInput ? "YES" : "",
-        getReservesAddrs.size > 0 ? "YES" : "",
+        getReservesParentSelectors.join(","),
         swapPairWallets.length > 0 ? "YES" : "",
         selector ?? "",
         tx.blockNumber,

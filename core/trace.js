@@ -144,7 +144,7 @@ const SELECTORS = {
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-function extractCalls(calls = [], results = []) {
+function extractCalls(calls = [], results = [], parentSelector = null) {
   for (const call of calls) {
     const selector = call.input?.slice(0, 10)?.toLowerCase();
     if (selector || SELECTORS[selector]) {
@@ -154,10 +154,11 @@ function extractCalls(calls = [], results = []) {
         to: call.to,
         input: call.input,
         output: call.output,
+        parentSelector,
       });
     }
     if (selector && !ignoreSwap[selector]) {
-      if (call.calls) extractCalls(call.calls, results);
+      if (call.calls) extractCalls(call.calls, results, selector);
     }
   }
   return results;
