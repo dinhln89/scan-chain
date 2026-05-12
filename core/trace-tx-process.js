@@ -15,14 +15,20 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   // Địa chỉ gọi getReserves() trong trace → chắc chắn là pair
   const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
   if (fromTrace.length > 0) {
-    await Promise.all(fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })));
+    await Promise.all(
+      fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })),
+    );
   }
 
   // Còn lại: kiểm tra DB trước, sau đó mới gọi RPC
   const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
-  const rows = notFromTrace.length > 0
-    ? await Contract.findAll({ where: { address: notFromTrace }, attributes: ["address", "isPair"] })
-    : [];
+  const rows =
+    notFromTrace.length > 0
+      ? await Contract.findAll({
+          where: { address: notFromTrace },
+          attributes: ["address", "isPair"],
+        })
+      : [];
   const dbMap = new Map(rows.map((c) => [c.address, c.isPair]));
 
   const known = notFromTrace.filter((a) => dbMap.get(a) === true);
@@ -31,15 +37,27 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   if (unknown.length > 0) {
     // 0x0902f1ac = getReserves(); kết quả >= 194 chars → trả về 3 uint112 → là pair
     const results = await batchRpc(
-      unknown.map((addr) => ({ method: "eth_call", params: [{ to: addr, data: "0x0902f1ac" }, "latest"] })),
+      unknown.map((addr) => ({
+        method: "eth_call",
+        params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
+      })),
     );
     await Promise.all(
       unknown.map((addr, i) => {
-        const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+        const isPair = !!(
+          results[i] &&
+          results[i] !== "0x" &&
+          results[i].length >= 194
+        );
         return Contract.upsert({ address: addr, isPair });
       }),
     );
-    known.push(...unknown.filter((_, i) => !!(results[i] && results[i] !== "0x" && results[i].length >= 194)));
+    known.push(
+      ...unknown.filter(
+        (_, i) =>
+          !!(results[i] && results[i] !== "0x" && results[i].length >= 194),
+      ),
+    );
   }
 
   return [...fromTrace, ...known];
@@ -59,24 +77,41 @@ async function processTxData(tx) {
   if (!isTransferFromErc20 && !isTransferSender) return null;
 
   // Token trả về cho người gọi (dùng để lấy symbol)
-  const firstToSender = transfers.find((t) => t.to.toLowerCase() === tx.from.toLowerCase());
+  const firstToSender = transfers.find(
+    (t) => t.to.toLowerCase() === tx.from.toLowerCase(),
+  );
 
   const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
-  const getReservesAddrs = new Set(getReservesCalls.map((c) => c.to?.toLowerCase()));
+  const getReservesAddrs = new Set(
+    getReservesCalls.map((c) => c.to?.toLowerCase()),
+  );
   const getReservesParentSelectors = [
     ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
   ];
   const balanceOfWallets = [
-    ...new Set(calls.filter((c) => c.fn === "balanceOf(address)" && c.wallet).map((c) => c.wallet.toLowerCase())),
+    ...new Set(
+      calls
+        .filter((c) => c.fn === "balanceOf(address)" && c.wallet)
+        .map((c) => c.wallet.toLowerCase()),
+    ),
   ];
 
   // Chạy song song: lấy symbol, simulate, resolve pair — độc lập nhau
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
-    firstToSender ? getErc20Symbol(firstToSender.token).then((s) => s || "") : Promise.resolve(""),
+    firstToSender
+      ? getErc20Symbol(firstToSender.token).then((s) => s || "")
+      : Promise.resolve(""),
     isTransferFromErc20
-      ? simulateTx(tx.to, tx.input, tx.blockNumber, tx.transactionIndex ?? transactionIndex)
+      ? simulateTx(
+          tx.to,
+          tx.input,
+          tx.blockNumber,
+          tx.transactionIndex ?? transactionIndex,
+        )
       : Promise.resolve(null),
-    isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
+    isTransferSender
+      ? resolveSwapPairs(balanceOfWallets, getReservesAddrs)
+      : Promise.resolve([]),
   ]);
 
   // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
@@ -84,22 +119,35 @@ async function processTxData(tx) {
   const tokenAddrsOnPairs = [
     ...new Set(
       calls
-        .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+        .filter(
+          (c) =>
+            c.fn === "balanceOf(address)" &&
+            c.wallet &&
+            pairSet.has(c.wallet.toLowerCase()),
+        )
         .map((c) => c.to?.toLowerCase())
         .filter(Boolean),
     ),
   ];
   const pairTokenSymbols = await Promise.all(
-    tokenAddrsOnPairs.map((addr) => getErc20Symbol(addr).then((s) => s || addr)),
+    tokenAddrsOnPairs.map((addr) =>
+      getErc20Symbol(addr).then((s) => s || addr),
+    ),
   );
 
   // Địa chỉ trong input tx mà có internal call gọi tới
-  const inputAddrs = new Set(extractAddressesFromInput(tx.input).map((a) => a.toLowerCase()));
+  const inputAddrs = new Set(
+    extractAddressesFromInput(tx.input).map((a) => a.toLowerCase()),
+  );
   const inputCallAddrs = [
-    ...new Set(calls.map((c) => c.to?.toLowerCase()).filter((a) => a && inputAddrs.has(a))),
+    ...new Set(
+      calls
+        .map((c) => c.to?.toLowerCase())
+        .filter((a) => a && inputAddrs.has(a)),
+    ),
   ]
     .map((a) => a.slice(0, 10))
-    .join(",");
+    .join(", ");
 
   return {
     calls,
@@ -123,11 +171,15 @@ function buildRow(tx, result, { includeSimulate = false } = {}) {
     `https://bscscan.com/tx/${tx.hash}`,
     result.symbol,
     result.inputCallAddrs,
-    result.getReservesParentSelectors.join(","),
-    result.pairTokenSymbols.join(","),
+    result.getReservesParentSelectors.join(", "),
+    result.pairTokenSymbols.join(", "),
   ];
   if (includeSimulate) {
-    row.push(result.isTransferFromErc20 && result.simulateResult?.notRevert ? "YES" : "");
+    row.push(
+      result.isTransferFromErc20 && result.simulateResult?.notRevert
+        ? "YES"
+        : "",
+    );
   }
   row.push(result.selector ?? "", tx.blockNumber, now.toLocaleString());
   return row;
