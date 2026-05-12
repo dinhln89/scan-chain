@@ -8,6 +8,7 @@ const IgnoreMethod = require("./ignore-method");
 const { sendMessage } = require("./telegram");
 
 const ignoreSwap = {
+  "0xfff6cae9": "",
   "0xfc1c1b21": "borrowTokenFromCollateral",
   "0xfb3bdb41": "swapETHForExactTokens(uint256,address[],address,uint256)",
   "0xfa461e33": "uniswapV3SwapCallback",

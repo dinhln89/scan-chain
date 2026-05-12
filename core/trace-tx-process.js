@@ -166,6 +166,7 @@ async function processTxData(tx) {
     selector,
     symbol,
     simulateResult,
+    swapPairWallets,
     pairTokenSymbols,
     getReservesParentSelectors,
     inputCallAddrs,

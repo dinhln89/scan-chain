@@ -55,6 +55,23 @@ async function main() {
   console.log("  inputCallAddrs     :", result.inputCallAddrs || "(none)");
   console.log("  getReservesParent  :", result.getReservesParentSelectors.join(",") || "(none)");
   console.log("  pairTokenSymbols   :", result.pairTokenSymbols.join(",") || "(none)");
+
+  // parentSelector của các balanceOf call trên pair
+  if (result.swapPairWallets.length > 0) {
+    const pairSet = new Set(result.swapPairWallets);
+    const pairBalanceCalls = result.calls.filter(
+      (c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()),
+    );
+    console.log("\n[pairToken parentSelectors]");
+    const seen = new Set();
+    pairBalanceCalls.forEach((c) => {
+      const key = `${c.to}|${c.parentSelector}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      console.log(`  token=${c.to}  parentSelector=${c.parentSelector ?? "(none)"}`);
+    });
+  }
+
   if (result.simulateResult) {
     console.log("  simulate.notRevert :", result.simulateResult.notRevert);
     console.log("  simulate.error     :", result.simulateResult.error ?? "(none)");
