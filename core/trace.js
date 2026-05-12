@@ -63,7 +63,7 @@ async function syncIgnoreSwapFromSheet() {
     const m = line.trim().match(/^(0x[0-9a-fA-F]{8})(?:,(.*))?$/);
     if (!m) continue;
     const sel = m[1].toLowerCase();
-    let comment = m[2].trim().replace(/^"|"$/g, "");
+    let comment = (m[2] ?? "").trim().replace(/^"|"$/g, "");
     if (!(sel in ignoreSwap)) {
       ignoreSwap[sel] = comment;
       added++;
