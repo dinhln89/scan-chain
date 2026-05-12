@@ -7,6 +7,7 @@ const {
   batchRpc,
   getErc20Symbol,
   simulateTx,
+  syncIgnoreSwapFromSheet,
 } = require("../core/trace");
 
 const { append } = require("../core/sheets");
@@ -14,10 +15,12 @@ const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
+// Xác định địa chỉ nào trong balanceOfWallets là swap pair (LP pool).
+// Ưu tiên kết quả từ trace (getReserves), fallback sang DB rồi mới gọi RPC.
 async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   if (balanceOfWallets.length === 0) return [];
 
-  // Từ trace: chắc chắn là pair
+  // Địa chỉ gọi getReserves() trong trace → chắc chắn là pair
   const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
   if (fromTrace.length > 0) {
     await Promise.all(
@@ -25,7 +28,7 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
     );
   }
 
-  // Không từ trace: DB → RPC
+  // Còn lại: kiểm tra DB trước, sau đó mới gọi RPC
   const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
 
   const rows =
@@ -41,6 +44,7 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   const unknown = notFromTrace.filter((a) => !dbMap.has(a));
 
   if (unknown.length > 0) {
+    // 0x0902f1ac = getReserves(); kết quả >= 194 chars nghĩa là trả về 3 uint112 → là pair
     const results = await batchRpc(
       unknown.map((addr) => ({
         method: "eth_call",
@@ -79,8 +83,10 @@ async function processTx(tx, txData) {
     transactionIndex,
   } = await analyzeTx(tx.hash, txData);
 
+  // Bỏ qua tx không có ERC20 transfer liên quan
   if (!isTransferFromErc20 && !isTransferSender) return;
 
+  // Token trả về cho người gọi (dùng để lấy symbol)
   const firstToSender = transfers.find(
     (t) => t.to.toLowerCase() === tx.from.toLowerCase(),
   );
@@ -98,6 +104,7 @@ async function processTx(tx, txData) {
     ),
   ];
 
+  // Chạy song song: lấy symbol, simulate, resolve pair — độc lập nhau
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
     firstToSender
       ? getErc20Symbol(firstToSender.token).then((s) => s || "")
@@ -117,6 +124,7 @@ async function processTx(tx, txData) {
 
   const now = new Date();
 
+  // Sheet4: contract có thể mint/transfer ERC20 và không revert khi simulate
   if (isTransferFromErc20 && simulateResult?.notRevert) {
     await append(
       [
@@ -135,6 +143,7 @@ async function processTx(tx, txData) {
     );
   }
 
+  // Sheet1: tx gửi token đến LP pair (dấu hiệu add liquidity hoặc swap tự viết)
   if (isTransferSender) {
     await append([
       [
@@ -153,6 +162,7 @@ async function processTx(tx, txData) {
   }
 }
 
+// Lỗi có thể bỏ qua hoàn toàn (đánh processed=true, không retry)
 const IGNORED_ERRORS = new Set([
   "NO_ERC20_TRANSFER",
   "IGNORED_METHOD",
@@ -162,6 +172,7 @@ const IGNORED_ERRORS = new Set([
 ]);
 
 const MAX_RETRIES = 3;
+// retryCount: map tx.id → số lần lỗi, tránh tx lỗi liên tục chiếm slot mãi
 const retryCount = new Map();
 
 async function processOne(tx) {
@@ -173,6 +184,7 @@ async function processOne(tx) {
     retryCount.delete(tx.id);
     log.info(`DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
+    // Lỗi ignored hoặc revert: không có giá trị retry, đánh processed luôn
     if (IGNORED_ERRORS.has(err.message) || err.message?.toLowerCase().includes("revert")) {
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
@@ -180,6 +192,7 @@ async function processOne(tx) {
     }
     const count = (retryCount.get(tx.id) || 0) + 1;
     if (count >= MAX_RETRIES) {
+      // Hết lượt retry: bỏ qua để không chặn queue
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
       log.warn(`Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`);
@@ -191,6 +204,7 @@ async function processOne(tx) {
 }
 
 const CONCURRENCY = 10;
+// inFlight: set tx.id đang xử lý — loại khỏi DB query để tránh fetch trùng
 const inFlight = new Set();
 
 async function scheduleBatch() {
@@ -211,6 +225,7 @@ async function scheduleBatch() {
 
   for (const tx of txs) {
     inFlight.add(tx.id);
+    // Không await — fire & forget, inFlight được dọn khi xong hoặc lỗi
     processOne(tx).finally(() => inFlight.delete(tx.id));
   }
 }
@@ -218,6 +233,8 @@ async function scheduleBatch() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  // Sync ignoreSwap từ sheet 1 lần duy nhất khi khởi động, không sync lại trong loop
+  await syncIgnoreSwapFromSheet();
   log.info("Bat dau xu ly transactions...");
 
   const loop = async () => {
