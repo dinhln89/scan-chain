@@ -92,7 +92,9 @@ async function processTx(tx, txData) {
   );
 
   const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
-  const getReservesAddrs = new Set(getReservesCalls.map((c) => c.to?.toLowerCase()));
+  const getReservesAddrs = new Set(
+    getReservesCalls.map((c) => c.to?.toLowerCase()),
+  );
   const getReservesParentSelectors = [
     ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
   ];
@@ -185,7 +187,10 @@ async function processOne(tx) {
     log.info(`DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
     // Lỗi ignored hoặc revert: không có giá trị retry, đánh processed luôn
-    if (IGNORED_ERRORS.has(err.message) || err.message?.toLowerCase().includes("revert")) {
+    if (
+      IGNORED_ERRORS.has(err.message) ||
+      err.message?.toLowerCase().includes("revert")
+    ) {
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
       return;
@@ -195,10 +200,14 @@ async function processOne(tx) {
       // Hết lượt retry: bỏ qua để không chặn queue
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
-      log.warn(`Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`);
+      log.warn(
+        `Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`,
+      );
     } else {
       retryCount.set(tx.id, count);
-      log.error(`Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`);
+      log.error(
+        `Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`,
+      );
     }
   }
 }
