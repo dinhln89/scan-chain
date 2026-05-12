@@ -2,6 +2,9 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
+// Giảm RPC throttle cho batch job — CUPS error sẽ được retry tự động
+if (!process.env.RPC_INTERVAL_MS) process.env.RPC_INTERVAL_MS = "80";
+
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
@@ -15,8 +18,8 @@ const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
-const CONCURRENCY = 10;
-const FLUSH_EVERY = 10;
+const CONCURRENCY = parseInt(process.env.SYNC_CONCURRENCY || "5", 10);
+const FLUSH_EVERY = 20;
 const CUPS_DELAY = 2000;
 const MAX_RETRIES = 5;
 
@@ -114,7 +117,7 @@ async function main() {
           pending.push(row);
           totalDone++;
           console.log(`  [${i + 1}/${toProcess.length}] DONE: ${tx.hash}`);
-          await flush();
+          flush(); // fire-and-forget — worker không block chờ Sheets
         } else {
           skipped++;
           console.log(`  [${i + 1}/${toProcess.length}] SKIP: ${tx.hash}`);
