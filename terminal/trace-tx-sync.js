@@ -86,7 +86,30 @@ async function reTraceTx(tx) {
   ];
 }
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 3;
+const CUPS_DELAY = 2000;
+const MAX_RETRIES = 5;
+
+function isCupsError(err) {
+  return err.message?.includes("CUPS limit") || err.message?.includes("rate limit") || err.message?.includes("Too Many Requests");
+}
+
+async function reTraceTxWithRetry(tx) {
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      return await reTraceTx(tx);
+    } catch (err) {
+      if (isCupsError(err)) {
+        const delay = CUPS_DELAY * attempt;
+        console.log(`  CUPS limit, doi ${delay}ms roi thu lai (lan ${attempt}/${MAX_RETRIES})...`);
+        await new Promise((r) => setTimeout(r, delay));
+      } else {
+        throw err;
+      }
+    }
+  }
+  throw new Error(`Vuot qua ${MAX_RETRIES} lan thu lai vi CUPS limit`);
+}
 
 async function main() {
   console.log("[1/4] Ket noi DB...");
