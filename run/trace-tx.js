@@ -129,13 +129,20 @@ async function processTx(tx, txData) {
   const tokenAddrsOnPairs = [
     ...new Set(
       calls
-        .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+        .filter(
+          (c) =>
+            c.fn === "balanceOf(address)" &&
+            c.wallet &&
+            pairSet.has(c.wallet.toLowerCase()),
+        )
         .map((c) => c.to?.toLowerCase())
         .filter(Boolean),
     ),
   ];
   const pairTokenSymbols = await Promise.all(
-    tokenAddrsOnPairs.map((addr) => getErc20Symbol(addr).then((s) => s || addr)),
+    tokenAddrsOnPairs.map((addr) =>
+      getErc20Symbol(addr).then((s) => s || addr),
+    ),
   );
 
   const now = new Date();
