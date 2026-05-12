@@ -47,9 +47,14 @@ function save(data) {
   fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 }
 
+// Cache sheet data trong memory, không ghi vào file
+let _sheetCache = {};
+
 const IgnoreMethod = {
+  // Kết hợp file (committed) + sheet (in-memory), không ghi file
   getAll() {
-    return new Set(Object.keys(load()).map((s) => s.toLowerCase()));
+    const file = load();
+    return new Set([...Object.keys(file), ...Object.keys(_sheetCache)].map((s) => s.toLowerCase()));
   },
 
   add(selector, comment = '') {
@@ -66,25 +71,14 @@ const IgnoreMethod = {
     return false;
   },
 
+  // Fetch sheet → lưu vào memory, không ghi file
   async syncFromSheet() {
     const csvList = await Promise.all(SHEET_URLS.map(fetchUrl));
-    const data = load();
-    let added = 0;
+    _sheetCache = {};
     for (const csv of csvList) {
-      const remote = parseCSV(csv);
-      for (const [sel, comment] of Object.entries(remote)) {
-        if (!(sel in data)) {
-          data[sel] = comment;
-          added++;
-        }
-      }
+      Object.assign(_sheetCache, parseCSV(csv));
     }
-    if (added > 0) {
-      save(data);
-      log.info(`[IgnoreMethod] Synced ${added} new entries from sheet`);
-    } else {
-      log.info('[IgnoreMethod] Sheet sync: no new entries');
-    }
+    log.info(`[IgnoreMethod] Sheet synced ${Object.keys(_sheetCache).length} entries (in-memory only)`);
   },
 
   remove(selector) {

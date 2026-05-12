@@ -30,49 +30,45 @@ function save(list) {
   fs.writeFileSync(FILE, JSON.stringify(list, null, 2));
 }
 
+// Cache sheet data trong memory, không ghi vào file
+let _sheetCache = new Set();
+
 const IgnoreAddress = {
+  // Kết hợp file (committed) + sheet (in-memory), không ghi file
   getAll() {
-    return new Set(load().map((a) => a.toLowerCase()));
+    const file = load();
+    const fileSet = new Set(file.map((a) => a.toLowerCase()));
+    for (const a of _sheetCache) fileSet.add(a);
+    return fileSet;
   },
 
   add(address) {
-    const list = load();
+    const data = load();
     const addr = address.toLowerCase();
-    if (!list.includes(addr)) {
-      list.push(addr);
-      save(list);
+    if (!data.includes(addr)) {
+      data.push(addr);
+      save(data);
       return true;
     }
     return false;
   },
 
+  // Fetch sheet → lưu vào memory, không ghi file
   async syncFromSheet() {
     const csv = await fetchUrl(SHEET_URL);
-    const remote = csv.split('\n')
-      .map((l) => l.trim().toLowerCase())
-      .filter((l) => /^0x[0-9a-f]{40}$/.test(l));
-    const list = load();
-    const existing = new Set(list.map((a) => a.toLowerCase()));
-    let added = 0;
-    for (const addr of remote) {
-      if (!existing.has(addr)) {
-        list.push(addr);
-        added++;
-      }
-    }
-    if (added > 0) {
-      save(list);
-      log.info(`[IgnoreAddress] Synced ${added} new entries from sheet`);
-    } else {
-      log.info('[IgnoreAddress] Sheet sync: no new entries');
-    }
+    _sheetCache = new Set(
+      csv.split('\n')
+        .map((l) => l.trim().toLowerCase())
+        .filter((l) => /^0x[0-9a-f]{40}$/.test(l)),
+    );
+    log.info(`[IgnoreAddress] Sheet synced ${_sheetCache.size} entries (in-memory only)`);
   },
 
   remove(address) {
-    const list = load();
+    const data = load();
     const addr = address.toLowerCase();
-    const next = list.filter((a) => a !== addr);
-    if (next.length !== list.length) {
+    const next = data.filter((a) => a !== addr);
+    if (next.length !== data.length) {
       save(next);
       return true;
     }
