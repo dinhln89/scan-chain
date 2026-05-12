@@ -52,6 +52,7 @@ async function reTraceTx(tx) {
     selector,
     transactionIndex,
   } = await analyzeTx(tx.hash, { from: tx.from, to: tx.to, input: tx.input });
+  console.log(`    analyzeTx: isTransferFromErc20=${isTransferFromErc20} isTransferSender=${isTransferSender}`);
 
   if (!isTransferFromErc20 && !isTransferSender) return false;
 
@@ -63,6 +64,7 @@ async function reTraceTx(tx) {
     ...new Set(calls.filter((c) => c.fn === "balanceOf(address)" && c.wallet).map((c) => c.wallet.toLowerCase())),
   ];
 
+  console.log(`    symbol+simulate+pairs...`);
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
     firstToSender ? getErc20Symbol(firstToSender.token).then((s) => s || "") : Promise.resolve(""),
     isTransferFromErc20
@@ -70,9 +72,11 @@ async function reTraceTx(tx) {
       : Promise.resolve(null),
     isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
   ]);
+  console.log(`    symbol="${symbol}" notRevert=${simulateResult?.notRevert ?? "-"} pairs=${swapPairWallets.length}`);
 
   const now = new Date();
 
+  console.log(`    append Sheet5...`);
   await append(
     [
       [
@@ -123,11 +127,10 @@ async function main() {
 
     try {
       console.log("");
-      console.log(`    analyzeTx...`);
       const appended = await reTraceTx(tx);
       if (appended) {
         done++;
-        console.log(`    => append Sheet5 DONE`);
+        console.log(`    => DONE`);
       } else {
         skipped++;
         console.log(`    => SKIP (khong pass filter)`);
