@@ -2,105 +2,12 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 const { Op } = require("sequelize");
 const sequelize = require("../db");
-const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
-const { analyzeTx, batchRpc, getErc20Symbol, simulateTx } = require("../core/trace");
+const { processTxData, buildRow } = require("../core/trace-tx-process");
 const { append, getRows } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
-
-async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
-  if (balanceOfWallets.length === 0) return [];
-
-  const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
-  if (fromTrace.length > 0) {
-    await Promise.all(fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })));
-  }
-
-  const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
-  const rows = notFromTrace.length > 0
-    ? await Contract.findAll({ where: { address: notFromTrace }, attributes: ["address", "isPair"] })
-    : [];
-  const dbMap = new Map(rows.map((c) => [c.address, c.isPair]));
-
-  const known = notFromTrace.filter((a) => dbMap.get(a) === true);
-  const unknown = notFromTrace.filter((a) => !dbMap.has(a));
-
-  if (unknown.length > 0) {
-    const results = await batchRpc(
-      unknown.map((addr) => ({ method: "eth_call", params: [{ to: addr, data: "0x0902f1ac" }, "latest"] })),
-    );
-    await Promise.all(
-      unknown.map((addr, i) => {
-        const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
-        return Contract.upsert({ address: addr, isPair });
-      }),
-    );
-    known.push(...unknown.filter((_, i) => !!(results[i] && results[i] !== "0x" && results[i].length >= 194)));
-  }
-
-  return [...fromTrace, ...known];
-}
-
-async function reTraceTx(tx) {
-  const {
-    calls,
-    transfers,
-    isCallInput,
-    isTransferSender,
-    isTransferFromErc20,
-    selector,
-    transactionIndex,
-  } = await analyzeTx(tx.hash, { from: tx.from, to: tx.to, input: tx.input });
-  if (!isTransferFromErc20 && !isTransferSender) return null;
-
-  const firstToSender = transfers.find((t) => t.to.toLowerCase() === tx.from.toLowerCase());
-  const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
-  const getReservesAddrs = new Set(getReservesCalls.map((c) => c.to?.toLowerCase()));
-  const getReservesParentSelectors = [
-    ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
-  ];
-  const balanceOfWallets = [
-    ...new Set(calls.filter((c) => c.fn === "balanceOf(address)" && c.wallet).map((c) => c.wallet.toLowerCase())),
-  ];
-
-  const [symbol, simulateResult, swapPairWallets] = await Promise.all([
-    firstToSender ? getErc20Symbol(firstToSender.token).then((s) => s || "") : Promise.resolve(""),
-    isTransferFromErc20
-      ? simulateTx(tx.to, tx.input, tx.blockNumber, tx.transactionIndex ?? transactionIndex)
-      : Promise.resolve(null),
-    isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
-  ]);
-
-  // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
-  const pairSet = new Set(swapPairWallets);
-  const tokenAddrsOnPairs = [
-    ...new Set(
-      calls
-        .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
-        .map((c) => c.to?.toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
-  const pairTokenSymbols = await Promise.all(
-    tokenAddrsOnPairs.map((addr) => getErc20Symbol(addr).then((s) => s || addr)),
-  );
-
-  return [
-    tx.hash,
-    `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-    `https://bscscan.com/tx/${tx.hash}`,
-    symbol,
-    isCallInput ? "YES" : "",
-    getReservesParentSelectors.join(","),
-    pairTokenSymbols.join(","),
-    isTransferFromErc20 && simulateResult?.notRevert ? "YES" : "",
-    selector ?? "",
-    tx.blockNumber,
-    new Date().toLocaleString(),
-  ];
-}
 
 const CONCURRENCY = 2;
 const FLUSH_EVERY = 20;
@@ -109,6 +16,12 @@ const MAX_RETRIES = 5;
 
 function isCupsError(err) {
   return err.message?.includes("CUPS limit") || err.message?.includes("rate limit") || err.message?.includes("Too Many Requests");
+}
+
+async function reTraceTx(tx) {
+  const result = await processTxData(tx);
+  if (!result) return null;
+  return buildRow(tx, result, { includeSimulate: true });
 }
 
 async function reTraceTxWithRetry(tx) {

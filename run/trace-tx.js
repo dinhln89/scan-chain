@@ -1,163 +1,30 @@
 const { Op } = require("sequelize");
 const sequelize = require("../db");
-const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
-const {
-  analyzeTx,
-  batchRpc,
-  getErc20Symbol,
-  simulateTx,
-  syncIgnoreSwapFromSheet,
-} = require("../core/trace");
-
+const { syncIgnoreSwapFromSheet } = require("../core/trace");
+const { processTxData, buildRow } = require("../core/trace-tx-process");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
-// Xác định địa chỉ nào trong balanceOfWallets là swap pair (LP pool).
-// Ưu tiên kết quả từ trace (getReserves), fallback sang DB rồi mới gọi RPC.
-async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
-  if (balanceOfWallets.length === 0) return [];
-
-  // Địa chỉ gọi getReserves() trong trace → chắc chắn là pair
-  const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
-  if (fromTrace.length > 0) {
-    await Promise.all(
-      fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })),
-    );
-  }
-
-  // Còn lại: kiểm tra DB trước, sau đó mới gọi RPC
-  const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
-
-  const rows =
-    notFromTrace.length > 0
-      ? await Contract.findAll({
-          where: { address: notFromTrace },
-          attributes: ["address", "isPair"],
-        })
-      : [];
-  const dbMap = new Map(rows.map((c) => [c.address, c.isPair]));
-
-  const known = notFromTrace.filter((a) => dbMap.get(a) === true);
-  const unknown = notFromTrace.filter((a) => !dbMap.has(a));
-
-  if (unknown.length > 0) {
-    // 0x0902f1ac = getReserves(); kết quả >= 194 chars nghĩa là trả về 3 uint112 → là pair
-    const results = await batchRpc(
-      unknown.map((addr) => ({
-        method: "eth_call",
-        params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
-      })),
-    );
-    await Promise.all(
-      unknown.map((addr, i) => {
-        const isPair = !!(
-          results[i] &&
-          results[i] !== "0x" &&
-          results[i].length >= 194
-        );
-        return Contract.upsert({ address: addr, isPair });
-      }),
-    );
-    known.push(
-      ...unknown.filter(
-        (_, i) =>
-          !!(results[i] && results[i] !== "0x" && results[i].length >= 194),
-      ),
-    );
-  }
-
-  return [...fromTrace, ...known];
-}
-
-async function processTx(tx, txData) {
-  const {
-    calls,
-    transfers,
-    isCallInput,
-    isTransferSender,
-    isTransferFromErc20,
-    selector,
-    transactionIndex,
-  } = await analyzeTx(tx.hash, txData);
-
-  // Bỏ qua tx không có ERC20 transfer liên quan
-  if (!isTransferFromErc20 && !isTransferSender) return;
-
-  // Token trả về cho người gọi (dùng để lấy symbol)
-  const firstToSender = transfers.find(
-    (t) => t.to.toLowerCase() === tx.from.toLowerCase(),
-  );
-
-  const getReservesCalls = calls.filter((c) => c.fn === "getReserves()");
-  const getReservesAddrs = new Set(
-    getReservesCalls.map((c) => c.to?.toLowerCase()),
-  );
-  const getReservesParentSelectors = [
-    ...new Set(getReservesCalls.map((c) => c.parentSelector).filter(Boolean)),
-  ];
-  const balanceOfWallets = [
-    ...new Set(
-      calls
-        .filter((c) => c.fn === "balanceOf(address)" && c.wallet)
-        .map((c) => c.wallet.toLowerCase()),
-    ),
-  ];
-
-  // Chạy song song: lấy symbol, simulate, resolve pair — độc lập nhau
-  const [symbol, simulateResult, swapPairWallets] = await Promise.all([
-    firstToSender
-      ? getErc20Symbol(firstToSender.token).then((s) => s || "")
-      : Promise.resolve(""),
-    isTransferFromErc20
-      ? simulateTx(
-          tx.to,
-          tx.input,
-          tx.blockNumber,
-          tx.transactionIndex ?? transactionIndex,
-        )
-      : Promise.resolve(null),
-    isTransferSender
-      ? resolveSwapPairs(balanceOfWallets, getReservesAddrs)
-      : Promise.resolve([]),
-  ]);
-
-  // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
-  const pairSet = new Set(swapPairWallets);
-  const tokenAddrsOnPairs = [
-    ...new Set(
-      calls
-        .filter(
-          (c) =>
-            c.fn === "balanceOf(address)" &&
-            c.wallet &&
-            pairSet.has(c.wallet.toLowerCase()),
-        )
-        .map((c) => c.to?.toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
-  const pairTokenSymbols = await Promise.all(
-    tokenAddrsOnPairs.map((addr) =>
-      getErc20Symbol(addr).then((s) => s || addr),
-    ),
-  );
+async function processTx(tx) {
+  const result = await processTxData(tx);
+  if (!result) return;
 
   const now = new Date();
 
   // Sheet4: contract có thể mint/transfer ERC20 và không revert khi simulate
-  if (isTransferFromErc20 && simulateResult?.notRevert) {
+  if (result.isTransferFromErc20 && result.simulateResult?.notRevert) {
     await append(
       [
         [
           tx.hash,
           `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
           `https://bscscan.com/tx/${tx.hash}`,
-          symbol,
+          result.symbol,
           "YES",
-          selector ?? "",
+          result.selector ?? "",
           tx.blockNumber,
           now.toLocaleString(),
         ],
@@ -167,21 +34,8 @@ async function processTx(tx, txData) {
   }
 
   // Sheet1: tx gửi token đến LP pair (dấu hiệu add liquidity hoặc swap tự viết)
-  if (isTransferSender) {
-    await append([
-      [
-        tx.hash,
-        `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-        `https://bscscan.com/tx/${tx.hash}`,
-        symbol,
-        isCallInput ? "YES" : "",
-        getReservesParentSelectors.join(", "),
-        pairTokenSymbols.join(","),
-        selector ?? "",
-        tx.blockNumber,
-        now.toLocaleString(),
-      ],
-    ]);
+  if (result.isTransferSender) {
+    await append([buildRow(tx, result)], { sheet: "Sheet1" });
   }
 }
 
@@ -202,16 +56,13 @@ async function processOne(tx) {
   const t0 = Date.now();
   log.info(`TX ${tx.hash}`);
   try {
-    await processTx(tx, { from: tx.from, to: tx.to, input: tx.input });
+    await processTx(tx);
     await tx.update({ processed: true });
     retryCount.delete(tx.id);
     log.info(`DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
     // Lỗi ignored hoặc revert: không có giá trị retry, đánh processed luôn
-    if (
-      IGNORED_ERRORS.has(err.message) ||
-      err.message?.toLowerCase().includes("revert")
-    ) {
+    if (IGNORED_ERRORS.has(err.message) || err.message?.toLowerCase().includes("revert")) {
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
       return;
@@ -221,14 +72,10 @@ async function processOne(tx) {
       // Hết lượt retry: bỏ qua để không chặn queue
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
-      log.warn(
-        `Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`,
-      );
+      log.warn(`Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`);
     } else {
       retryCount.set(tx.id, count);
-      log.error(
-        `Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`,
-      );
+      log.error(`Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`);
     }
   }
 }
@@ -242,14 +89,12 @@ async function scheduleBatch() {
   if (slots <= 0) return;
 
   const where = { processed: false };
+  // Loại các tx đang xử lý dở khỏi query
   if (inFlight.size > 0) where.id = { [Op.notIn]: [...inFlight] };
 
   const txs = await Transaction.findAll({
     where,
-    order: [
-      ["blockNumber", "ASC"],
-      ["id", "ASC"],
-    ],
+    order: [["blockNumber", "ASC"], ["id", "ASC"]],
     limit: slots,
   });
 
