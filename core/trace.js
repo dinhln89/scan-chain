@@ -7,59 +7,35 @@ const IgnoreMethod = require("./ignore-method");
 const { sendMessage } = require("./telegram");
 
 const ignoreSwap = {
-  "0x8803dbee":
-    "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
-  "0x18cbafe5": "swapExactETHForTokens(uint256,address[],address,uint256)",
-  "0x7ff36ab5":
-    "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
-  "0x38ed1739":
-    "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-  "0x5c11d795":
-    "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0xf2c42696": "dagSwapByOrderId(uint256,uint256,uint256,address,uint256)",
   "0xfc1c1b21": "borrowTokenFromCollateral",
-  "0x128acb08": "swap",
-  "0xfa461e33": "uniswapV3SwapCallback",
-  "0x022c0d9f": "",
-  "0xc45a0155": "factory()",
-  "0xad5c4648": "WETH()",
-  "0xe8e33700":
-    "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
-  "0xf305d719":
-    "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
-  "0xbaa2abde":
-    "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
-  "0x02751cec":
-    "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
-  "0x2195995c":
-    "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0xded9382a":
-    "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0xaf2979eb":
-    "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
-  "0x5b0d5984":
-    "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0x38ed1739":
-    "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
-  "0x8803dbee":
-    "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
-  "0x7ff36ab5": "swapExactETHForTokens(uint256,address[],address,uint256)",
-  "0x4a25d94a":
-    "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
-  "0x18cbafe5":
-    "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
   "0xfb3bdb41": "swapETHForExactTokens(uint256,address[],address,uint256)",
-  "0x5c11d795":
-    "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0xb6f9de95":
-    "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
-  "0x791ac947":
-    "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0xad615dec": "quote(uint256,uint256,uint256)",
-  "0x054d50d4": "getAmountOut(uint256,uint256,uint256)",
-  "0x85f8c259": "getAmountIn(uint256,uint256,uint256)",
+  "0xfa461e33": "uniswapV3SwapCallback",
+  "0xf305d719": "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+  "0xf2c42696": "dagSwapByOrderId(uint256,uint256,uint256,address,uint256)",
+  "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+  "0xded9382a": "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
   "0xd06ca61f": "getAmountsOut(uint256,address[])",
+  "0xc45a0155": "factory()",
+  "0xbaa2abde": "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+  "0xb6f9de95": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+  "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
+  "0xad615dec": "quote(uint256,uint256,uint256)",
+  "0xad5c4648": "WETH()",
+  "0x8803dbee": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+  "0x85f8c259": "getAmountIn(uint256,uint256,uint256)",
+  "0x7ff36ab5": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+  "0x791ac947": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  "0x5c11d795": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  "0x5b0d5984": "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+  "0x4a25d94a": "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+  "0x38ed1739": "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+  "0x2195995c": "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
   "0x1f00ca74": "getAmountsIn(uint256,address[])",
+  "0x18cbafe5": "swapExactETHForTokens(uint256,address[],address,uint256)",
+  "0x128acb08": "swap",
+  "0x054d50d4": "getAmountOut(uint256,uint256,uint256)",
+  "0x02751cec": "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+  "0x022c0d9f": "",
 };
 
 const BSC_RPC =
