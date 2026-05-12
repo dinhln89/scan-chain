@@ -94,12 +94,21 @@ const WELL_KNOWN_TOKENS = new Set([
   "0x8076c74c5e3f5852037f31ff0093eeb8c8add8d3", // SAFEMOON
   "0xae9269f27437f0fcbc232d39ec814844a51d6b8f", // BURGER
 
-  // Other notable
+  // Other notable BSC
   "0xa184088a740c695e156f91f5cc086a06bb78b827", // AUTO
-  "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d", // (dup USDC, harmless)
-  "0x0e09fabb73bd3ade0a17ecc321fd13a19e81ce82", // (dup CAKE, harmless)
-  "0xc9882def23bc42d53895b8361d0b1edc7570bc6a", // FIST
-  "0x4b1aacd47bed1bd9f91935abe149dfd8b2777777", // AW
+  "0xac51066d7bec65dc4589368da368b212745d63e8", // ALICE
+  "0xa8c2b8eec3d368c0253ad3dae65a5f2bbb89c929", // CTK (Certik)
+  "0xd41fdb03ba84762dd66a0af1a6c8540ff1ba5dfb", // SFP (SafePal)
+  "0x67ee3cb086f8a16f34bee3ca72fad36f7db929e2", // DODO
+  "0x762539b45a1dcce3d36d080f74d1aed37844b878", // LINA (Linear)
+  "0x0112e557d400474717056c4e6d40dd6a85184779", // PHA (Phala)
+  "0xb2bd0749dbe21f623d9baba856d3b0f0e1bfec9c", // DUSK
+  "0xaec945e04baf28b135fa7c640f624f8d90f1c3a6", // C98 (Coin98)
+  "0x5f4bde007dc06b867f86ebfe4802e2cf751a1f21", // HIGH
+  "0xb86abcb37c3a4b64f74f59301aff131a1becc787", // ZIL
+  "0x6f400810b62df8e13fded51be75ff5393eaa841f", // EGLD (dup, harmless)
+  "0x8c851d1a123ff703bd1f9dedd29602eb1d19f93a", // BNX (BinaryX)
+  "0xc0f33210d63e83f85c3d01f2d7cacd028f2e66ae", // HOT (Holo)
 ]);
 
 // Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
