@@ -37,4 +37,12 @@ async function deleteRows(values, { sheet } = {}) {
   }
 }
 
-module.exports = { append, deleteRows };
+async function getRows({ sheet } = {}) {
+  const url = new URL(APPS_SCRIPT_URL);
+  if (sheet) url.searchParams.set("sheet", sheet);
+  const res = await fetch(url.toString());
+  if (!res.ok) throw new Error(`Apps Script error: ${res.status}`);
+  return res.json();
+}
+
+module.exports = { append, deleteRows, getRows };
