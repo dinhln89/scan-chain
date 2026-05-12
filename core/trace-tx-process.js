@@ -126,19 +126,24 @@ async function processTxData(tx) {
 
   // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
   const pairSet = new Set(swapPairWallets);
-  const tokenAddrsOnPairs = [
-    ...new Set(
-      calls
-        .filter(
-          (c) =>
-            c.fn === "balanceOf(address)" &&
-            c.wallet &&
-            pairSet.has(c.wallet.toLowerCase()),
-        )
-        .map((c) => c.to?.toLowerCase())
-        .filter(Boolean),
-    ),
-  ];
+
+  // Bước 1: balanceOf calls đến swapPair → ứng viên token
+  const swapPairBalanceOfs = new Set(
+    calls
+      .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+      .map((c) => c.to?.toLowerCase())
+      .filter(Boolean),
+  );
+
+  // Bước 2: nếu có call 0x022c0d9f đến địa chỉ trong swapPairBalanceOfs → đó là pair, không phải token → loại ra
+  for (const c of calls) {
+    if (c.input?.slice(0, 10)?.toLowerCase() === "0x022c0d9f" && c.to) {
+      swapPairBalanceOfs.delete(c.to.toLowerCase());
+    }
+  }
+
+  // Bước 3: tokenAddrsOnPairs = swapPairBalanceOfs sau khi lọc
+  const tokenAddrsOnPairs = [...swapPairBalanceOfs];
   const pairTokenSymbols = await Promise.all(
     tokenAddrsOnPairs.map((addr) =>
       getErc20Symbol(addr).then((s) => s || addr),
