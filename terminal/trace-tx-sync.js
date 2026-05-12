@@ -138,7 +138,7 @@ async function main() {
       const i = idx++;
       const tx = txMap.get(toProcess[i]);
       try {
-        const row = await reTraceTx(tx);
+        const row = await reTraceTxWithRetry(tx);
         if (row) {
           resultRows.push(row);
           console.log(`  [${i + 1}/${toProcess.length}] DONE: ${tx.hash}`);
