@@ -417,7 +417,6 @@ async function analyzeTx(txHash, txData = null) {
   ];
 
   let calls = [];
-  let isCallInput = false;
 
   const trace = await rpc("debug_traceTransaction", [
     txHash,
@@ -433,13 +432,6 @@ async function analyzeTx(txHash, txData = null) {
     }
   });
 
-  if (isTransferSender) {
-    const callAddrs = calls.map((c) => c.to?.toLowerCase());
-    if (callAddrs.includes(sender) || callAddrs.some((a) => inputSet.has(a))) {
-      isCallInput = true;
-    }
-  }
-
   const addersExcludeFromSet = new Set(addersExcludeFrom);
   const isTransferFromErc20 = calls.some((c) => {
     if (!c.input?.toLowerCase().startsWith("0x23b872dd")) return false;
@@ -452,7 +444,6 @@ async function analyzeTx(txHash, txData = null) {
     calls,
     logs: receipt?.logs || [],
     hasSignature: hasSignatureInInput(tx.input),
-    isCallInput,
     isTransferFromErc20,
     isTransferSender,
     selector,

@@ -27,7 +27,6 @@ async function main() {
     const result = await analyzeTx(txHash);
     fixture.result = result;
     console.log(`isTransferSender: ${result.isTransferSender}`);
-    console.log(`isCallInput:      ${result.isCallInput}`);
   } catch (err) {
     fixture.error = err.message;
     console.log(`analyzeTx threw: ${err.message}`);

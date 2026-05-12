@@ -51,11 +51,10 @@ async function main() {
     return;
   }
 
-  const { addresses, calls, transfers, isCallInput, isTransferSender, selector, tokenSymbols } =
+  const { addresses, calls, transfers, isTransferSender, selector, tokenSymbols } =
     result;
 
   console.log("isTransferSender:", isTransferSender);
-  console.log("isCallInput:     ", isCallInput);
   console.log("selector:        ", selector ?? "(none)");
 
   if (Object.keys(tokenSymbols).length > 0) {
@@ -99,7 +98,7 @@ async function main() {
   if (fixture.result) {
     const expected = fixture.result;
     const ok =
-      expected.isTransferSender === isTransferSender && expected.isCallInput === isCallInput;
+      expected.isTransferSender === isTransferSender;
     console.log(`\nKet qua khop voi fixture: ${ok ? "OK" : "KHAC"}`);
   }
 }

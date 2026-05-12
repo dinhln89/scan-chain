@@ -32,8 +32,8 @@ async function processTx(tx) {
     );
   }
 
-  // Sheet1: tx gửi token đến LP pair (dấu hiệu add liquidity hoặc swap tự viết)
-  if (result.isTransferSender) {
+  // Sheet1: isTransferSender hoặc phát hiện token trong pair
+  if (result.isTransferSender || result.pairTokenSymbols.length > 0) {
     await append([buildRow(tx, result)], { sheet: "Sheet1" });
   }
 }
