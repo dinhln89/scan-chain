@@ -109,6 +109,23 @@ const WELL_KNOWN_TOKENS = new Set([
   "0x6f400810b62df8e13fded51be75ff5393eaa841f", // EGLD (dup, harmless)
   "0x8c851d1a123ff703bd1f9dedd29602eb1d19f93a", // BNX (BinaryX)
   "0xc0f33210d63e83f85c3d01f2d7cacd028f2e66ae", // HOT (Holo)
+  "0xebd49b26169e1b52c04cfd19fcf289405df55f80", // ORBS
+  "0x3203c9e46ca618c8c1ce5de11d7a8f8bfce59b9",  // MBOX (Mobox)
+  "0x154a9f9cbd3449ad22fdae23044319d6ef2a1fab", // SKILL (CryptoBlades)
+  "0xa2120b9e674d3fc3875f415a7df52e382f141225", // ATA (Automata)
+  "0x90c97f71e18723b0cf0dfa30ee176ab653e89f40", // FRAX
+  "0xbe1a001fe942f96eea22ba08783140b9dcc09d28", // BETA (Beta Finance)
+  "0x9f589e3eabe42ebc94a44727b3f3531c0c877ef9", // TKO (Tokocrypto)
+  "0xaf53d56ff99f1322515e54fdde93ff8b3b7dafd5", // PROM
+  "0x8e17ed70334c87ece574c9d537b47256ae46e6e9", // WRX (WazirX)
+  "0x3a9b6e4a30ecaa7e68196b900f1bb72b9da2a7a8", // CHZ (Chiliz)
+  "0xbd86e7f41fd0fbe498ca14e0afd4e8cf5ee6fe61", // APE (ApeCoin)
+  "0xdce07662ca8ebc241316a15b611c89711414dd1a", // OCEAN
+  "0x4fa7163e153419e0e1064e418dd7a99314ed27b6", // SHPING
+  "0x1ba42e5193dfa8b03d15dd1b86a3113bbbef8eeb", // ZEC (Zcash)
+  "0x101d82428437127bf1608f699cd651e6abf9766e", // BAT
+  "0x62d71b23bf15151a1ed97f7934a7d99e09a1cd9",  // OG (OG Fan Token)
+  "0x23ce9e926048a4e719f68bfceb9b951ca3e3b1b",  // NCT (PolySwarm)
 ]);
 
 // Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
