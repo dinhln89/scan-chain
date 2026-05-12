@@ -328,10 +328,14 @@ async function getErc20Symbol(tokenAddress) {
 
   if (_tokenCache.has(addr)) return _tokenCache.get(addr);
 
-  const cached = await Token.findByPk(addr);
-  if (cached) {
-    _tokenCache.set(addr, cached.symbol);
-    return cached.symbol;
+  try {
+    const cached = await Token.findByPk(addr);
+    if (cached) {
+      _tokenCache.set(addr, cached.symbol);
+      return cached.symbol;
+    }
+  } catch {
+    // DB không khả dụng → bỏ qua cache, fetch trực tiếp từ RPC
   }
 
   let symbol = null;
@@ -344,7 +348,12 @@ async function getErc20Symbol(tokenAddress) {
   } catch {
     // token reverts on symbol() — treat as null
   }
-  await Token.upsert({ address: addr, symbol });
+
+  try {
+    await Token.upsert({ address: addr, symbol });
+  } catch {
+    // DB không khả dụng → chỉ lưu vào in-memory cache
+  }
   _tokenCache.set(addr, symbol);
   return symbol;
 }

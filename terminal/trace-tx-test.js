@@ -6,11 +6,21 @@ const sequelize = require("../db");
 const { rpc, extractAddressesFromInput } = require("../core/trace");
 const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 
+async function tryConnectDb() {
+  try {
+    await sequelize.ensureDatabase();
+    await sequelize.sync();
+    return true;
+  } catch {
+    console.warn("  [warn] DB khong ket noi duoc — resolveSwapPairs se bi skip");
+    return false;
+  }
+}
+
 async function main() {
   const txHash = process.argv[2] || "0x6a4cdaf641bd1b0c5254cd33171e0a750b5cd88c8afa88264ff0d21a2969267a";
 
-  await sequelize.ensureDatabase();
-  await sequelize.sync();
+  await tryConnectDb();
   await syncAll();
 
   console.log("\n[TX] Fetching:", txHash);
@@ -57,6 +67,9 @@ async function main() {
   console.log("  pairTokenSymbols   :", result.pairTokenSymbols.join(",") || "(none)");
 
   // parentSelector của các balanceOf call trên pair
+  console.log("\n[swapPairWallets]");
+  result.swapPairWallets.forEach((p) => console.log(`  ${p}`));
+
   if (result.swapPairWallets.length > 0) {
     const pairSet = new Set(result.swapPairWallets);
     const pairBalanceCalls = result.calls.filter(
@@ -65,10 +78,10 @@ async function main() {
     console.log("\n[pairToken parentSelectors]");
     const seen = new Set();
     pairBalanceCalls.forEach((c) => {
-      const key = `${c.to}|${c.parentSelector}`;
+      const key = `${c.to}|${c.wallet}|${c.parentSelector}`;
       if (seen.has(key)) return;
       seen.add(key);
-      console.log(`  token=${c.to}  parentSelector=${c.parentSelector ?? "(none)"}`);
+      console.log(`  token=${c.to}  wallet(pair)=${c.wallet}  parentSelector=${c.parentSelector ?? "(none)"}`);
     });
   }
 

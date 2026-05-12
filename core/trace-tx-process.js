@@ -24,21 +24,29 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
 
   // Địa chỉ gọi getReserves() trong trace → chắc chắn là pair
   const fromTrace = balanceOfWallets.filter((a) => getReservesAddrs.has(a));
-  if (fromTrace.length > 0) {
-    await Promise.all(
-      fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })),
-    );
+  try {
+    if (fromTrace.length > 0) {
+      await Promise.all(
+        fromTrace.map((a) => Contract.upsert({ address: a, isPair: true })),
+      );
+    }
+  } catch {
+    // DB không khả dụng → bỏ qua upsert, vẫn dùng fromTrace
   }
 
   // Còn lại: kiểm tra DB trước, sau đó mới gọi RPC
   const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
-  const rows =
-    notFromTrace.length > 0
+  let rows = [];
+  try {
+    rows = notFromTrace.length > 0
       ? await Contract.findAll({
           where: { address: notFromTrace },
           attributes: ["address", "isPair"],
         })
       : [];
+  } catch {
+    // DB không khả dụng → bỏ qua, xử lý tất cả qua RPC
+  }
   const dbMap = new Map(rows.map((c) => [c.address, c.isPair]));
 
   const known = notFromTrace.filter((a) => dbMap.get(a) === true);
@@ -52,16 +60,16 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
         params: [{ to: addr, data: "0x0902f1ac" }, "latest"],
       })),
     );
-    await Promise.all(
-      unknown.map((addr, i) => {
-        const isPair = !!(
-          results[i] &&
-          results[i] !== "0x" &&
-          results[i].length >= 194
-        );
-        return Contract.upsert({ address: addr, isPair });
-      }),
-    );
+    try {
+      await Promise.all(
+        unknown.map((addr, i) => {
+          const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+          return Contract.upsert({ address: addr, isPair });
+        }),
+      );
+    } catch {
+      // DB không khả dụng → bỏ qua upsert
+    }
     known.push(
       ...unknown.filter(
         (_, i) =>
@@ -135,11 +143,29 @@ async function processTxData(tx) {
       .filter(Boolean),
   );
 
-  // Bước 2: nếu có call 0x022c0d9f đến địa chỉ trong swapPairBalanceOfs → đó là pair, không phải token → loại ra
+  // Địa chỉ trong input tx mà có internal call gọi tới
+  const inputAddrs = new Set(
+    extractAddressesFromInput(tx.input).map((a) => a.toLowerCase()),
+  );
+  const calledFromInput = new Set(
+    calls.map((c) => c.to?.toLowerCase()).filter((a) => a && inputAddrs.has(a)),
+  );
+  const inputCallAddrs = [...calledFromInput].map((a) => a.slice(0, 10)).join(", ");
+
+  // Bước 2: loại khỏi swapPairBalanceOfs nếu:
+  //   - có call 0x022c0d9f đến địa chỉ đó (là pair, không phải token)
+  //   - địa chỉ đó đã là confirmed pair
+  //   - địa chỉ đó nằm trong inputAddrs (đã được truyền explicit vào function, không cần discover)
   for (const c of calls) {
     if (c.input?.slice(0, 10)?.toLowerCase() === "0x022c0d9f" && c.to) {
       swapPairBalanceOfs.delete(c.to.toLowerCase());
     }
+  }
+  for (const addr of pairSet) {
+    swapPairBalanceOfs.delete(addr);
+  }
+  for (const addr of inputAddrs) {
+    swapPairBalanceOfs.delete(addr);
   }
 
   // Bước 3: tokenAddrsOnPairs = swapPairBalanceOfs sau khi lọc
@@ -149,20 +175,6 @@ async function processTxData(tx) {
       getErc20Symbol(addr).then((s) => s || addr),
     ),
   );
-
-  // Địa chỉ trong input tx mà có internal call gọi tới
-  const inputAddrs = new Set(
-    extractAddressesFromInput(tx.input).map((a) => a.toLowerCase()),
-  );
-  const inputCallAddrs = [
-    ...new Set(
-      calls
-        .map((c) => c.to?.toLowerCase())
-        .filter((a) => a && inputAddrs.has(a)),
-    ),
-  ]
-    .map((a) => a.slice(0, 10))
-    .join(", ");
 
   return {
     calls,
