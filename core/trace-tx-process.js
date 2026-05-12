@@ -126,6 +126,11 @@ const WELL_KNOWN_TOKENS = new Set([
   "0x101d82428437127bf1608f699cd651e6abf9766e", // BAT
   "0x62d71b23bf15151a1ed97f7934a7d99e09a1cd9",  // OG (OG Fan Token)
   "0x23ce9e926048a4e719f68bfceb9b951ca3e3b1b",  // NCT (PolySwarm)
+  "0x7ae8ea61a5d28c5cbbb65ac0f09f24f4abf0a0cb", // PERP (Perpetual Protocol)
+  "0xf307910a4c7bbc79691fd374889b36d8531b08e3", // ANKR
+  "0x3bf6060f0384b8f37a5228e5be9b26e5adc73f7a", // WING (Wing Finance)
+  "0x949d48eca67b17269629c7194f4b727d4ef9e5d6", // MC (Merit Circle)
+  "0x56b6fb708fc5732dec1afc8d8556423a2edccbd6", // EOS (dup, harmless)
 ]);
 
 // Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
