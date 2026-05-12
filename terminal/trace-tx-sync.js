@@ -53,7 +53,7 @@ async function reTraceTx(tx) {
     selector,
     transactionIndex,
   } = await analyzeTx(tx.hash, { from: tx.from, to: tx.to, input: tx.input });
-  if (!isTransferFromErc20 && !isTransferSender) return false;
+  if (!isTransferFromErc20 && !isTransferSender) return null;
 
   const firstToSender = transfers.find((t) => t.to.toLowerCase() === tx.from.toLowerCase());
   const getReservesAddrs = new Set(
@@ -70,31 +70,23 @@ async function reTraceTx(tx) {
       : Promise.resolve(null),
     isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
   ]);
-  const now = new Date();
 
-  await append(
-    [
-      [
-        tx.hash,
-        `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-        `https://bscscan.com/tx/${tx.hash}`,
-        symbol,
-        isCallInput ? "YES" : "",
-        getReservesAddrs.size > 0 ? "YES" : "",
-        swapPairWallets.length > 0 ? "YES" : "",
-        isTransferFromErc20 && simulateResult?.notRevert ? "YES" : "",
-        selector ?? "",
-        tx.blockNumber,
-        now.toLocaleString(),
-      ],
-    ],
-    { sheet: "Sheet5" },
-  );
-
-  return true;
+  return [
+    tx.hash,
+    `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
+    `https://bscscan.com/tx/${tx.hash}`,
+    symbol,
+    isCallInput ? "YES" : "",
+    getReservesAddrs.size > 0 ? "YES" : "",
+    swapPairWallets.length > 0 ? "YES" : "",
+    isTransferFromErc20 && simulateResult?.notRevert ? "YES" : "",
+    selector ?? "",
+    tx.blockNumber,
+    new Date().toLocaleString(),
+  ];
 }
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 10;
 
 async function main() {
   console.log("[1/4] Ket noi DB...");
@@ -113,35 +105,39 @@ async function main() {
   console.log(`  Co trong DB: ${toProcess.length} | Thieu: ${notInDb}`);
 
   console.log(`[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY})...`);
-  let done = 0;
+  let idx = 0;
   let skipped = 0;
   let errors = 0;
-  let idx = 0;
+  const resultRows = [];
 
   async function worker() {
     while (idx < toProcess.length) {
       const i = idx++;
-      const hash = toProcess[i];
-      const tx = txMap.get(hash);
+      const tx = txMap.get(toProcess[i]);
       try {
-        const appended = await reTraceTx(tx);
-        if (appended) {
-          done++;
-          console.log(`  [${i + 1}/${toProcess.length}] DONE: ${hash}`);
+        const row = await reTraceTx(tx);
+        if (row) {
+          resultRows.push(row);
+          console.log(`  [${i + 1}/${toProcess.length}] DONE: ${tx.hash}`);
         } else {
           skipped++;
-          console.log(`  [${i + 1}/${toProcess.length}] SKIP: ${hash}`);
+          console.log(`  [${i + 1}/${toProcess.length}] SKIP: ${tx.hash}`);
         }
       } catch (err) {
         errors++;
-        console.log(`  [${i + 1}/${toProcess.length}] ERROR: ${hash}: ${err.message}`);
+        console.log(`  [${i + 1}/${toProcess.length}] ERROR: ${tx.hash}: ${err.message}`);
       }
     }
   }
 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  console.log(`[4/4] Xong. Done=${done} Skipped=${skipped} Errors=${errors + notInDb}`);
+  if (resultRows.length > 0) {
+    console.log(`  Append ${resultRows.length} rows vao Sheet5...`);
+    await append(resultRows, { sheet: "Sheet5" });
+  }
+
+  console.log(`[4/4] Xong. Done=${resultRows.length} Skipped=${skipped} Errors=${errors + notInDb}`);
   await sequelize.close();
 }
 
