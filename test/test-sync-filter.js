@@ -1,17 +1,29 @@
 const assert = require("assert");
 
-// Logic filter Sync event — giống hệt trong trace-tx-process.js
 const SYNC_TOPIC = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
 
-function filterSyncEmitters(swapPairBalanceOfs, logs) {
+// Giống hệt logic trong trace-tx-process.js — 2 tầng filter
+function filterSync(swapPairBalanceOfs, logs, calls) {
   const syncEmitters = new Set(
     logs
       .filter((l) => l.topics?.[0]?.toLowerCase() === SYNC_TOPIC)
       .map((l) => l.address?.toLowerCase())
       .filter(Boolean),
   );
+  // Tầng 1: token address emit Sync → là pair, không phải token
   for (const addr of syncEmitters) {
     swapPairBalanceOfs.delete(addr);
+  }
+  // Tầng 2: pair (c.wallet) emit Sync → token là reserve của swap, không cần discover
+  for (const c of calls) {
+    if (
+      c.fn === "balanceOf(address)" &&
+      c.wallet &&
+      syncEmitters.has(c.wallet.toLowerCase()) &&
+      c.to
+    ) {
+      swapPairBalanceOfs.delete(c.to.toLowerCase());
+    }
   }
 }
 
@@ -30,69 +42,108 @@ function test(name, fn) {
   }
 }
 
-// Địa chỉ từ tx 0x3deeebe4f52052e6235ff3bd0a51d408d2ad8a6ca4264e923ed2be882e4d6d49
+// Địa chỉ từ tx 0x3deeebe4... (BUSD case)
 const BUSD    = "0xe9e7cea3dedca5984780bafc599bd69add087d56";
-const PAIR    = "0x7efaef62fddcca950418312c6c91aef321375a00";
-const TOKEN_X = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // token hợp lệ (không emit Sync)
+const PAIR_A  = "0x7efaef62fddcca950418312c6c91aef321375a00";
+// Địa chỉ từ tx 0x1fd919a6... (AW/FIST case)
+const AW      = "0x4b1aacd47bed1bd9f91935abe149dfd8b2777777";
+const FIST    = "0xc9882def23bc42d53895b8361d0b1edc7570bc6a";
+const PAIR_B  = "0xecbe29d11b2481dce9fcc8fe0db11fa5ec6ad637";
+const TOKEN_X = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
-console.log("\n[Sync event filter]");
+// --- Tầng 1: token địa chỉ emit Sync ---
+console.log("\n[Tang 1: token emit Sync → la pair]");
 
-test("pair emit Sync → bị loại khỏi swapPairBalanceOfs", () => {
+test("token emit Sync → bi loai (BUSD case)", () => {
   const set = new Set([BUSD, TOKEN_X]);
-  const logs = [
-    { topics: [SYNC_TOPIC], address: BUSD },
-  ];
-  filterSyncEmitters(set, logs);
-  assert.ok(!set.has(BUSD), "BUSD phai bi loai");
-  assert.ok(set.has(TOKEN_X), "TOKEN_X phai giu lai");
-});
-
-test("nhieu pair emit Sync → tat ca bi loai", () => {
-  const set = new Set([BUSD, PAIR, TOKEN_X]);
-  const logs = [
-    { topics: [SYNC_TOPIC], address: BUSD },
-    { topics: [SYNC_TOPIC], address: PAIR },
-  ];
-  filterSyncEmitters(set, logs);
+  filterSync(set, [{ topics: [SYNC_TOPIC], address: BUSD }], []);
   assert.ok(!set.has(BUSD));
-  assert.ok(!set.has(PAIR));
   assert.ok(set.has(TOKEN_X));
 });
 
-test("khong co Sync event → khong loai gi", () => {
+test("nhieu token emit Sync → tat ca bi loai", () => {
+  const set = new Set([BUSD, PAIR_A, TOKEN_X]);
+  filterSync(set, [
+    { topics: [SYNC_TOPIC], address: BUSD },
+    { topics: [SYNC_TOPIC], address: PAIR_A },
+  ], []);
+  assert.ok(!set.has(BUSD));
+  assert.ok(!set.has(PAIR_A));
+  assert.ok(set.has(TOKEN_X));
+});
+
+test("khong co Sync event → giu nguyen", () => {
   const set = new Set([BUSD, TOKEN_X]);
-  const logs = [
+  filterSync(set, [
     { topics: ["0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"], address: BUSD },
-  ];
-  filterSyncEmitters(set, logs);
-  assert.ok(set.has(BUSD), "BUSD phai giu lai khi khong co Sync");
+  ], []);
+  assert.ok(set.has(BUSD));
   assert.ok(set.has(TOKEN_X));
 });
 
 test("log khong co topics → bo qua", () => {
   const set = new Set([BUSD]);
-  const logs = [
+  filterSync(set, [
     { address: BUSD },
     { topics: [], address: BUSD },
     { topics: null, address: BUSD },
-  ];
-  filterSyncEmitters(set, logs);
-  assert.ok(set.has(BUSD), "BUSD phai giu lai khi topics khong hop le");
+  ], []);
+  assert.ok(set.has(BUSD));
 });
 
 test("Sync topic case-insensitive", () => {
   const set = new Set([BUSD]);
-  const logs = [
-    { topics: [SYNC_TOPIC.toUpperCase()], address: BUSD },
-  ];
-  filterSyncEmitters(set, logs);
-  assert.ok(!set.has(BUSD), "BUSD phai bi loai du topic la uppercase");
+  filterSync(set, [{ topics: [SYNC_TOPIC.toUpperCase()], address: BUSD }], []);
+  assert.ok(!set.has(BUSD));
+});
+
+// --- Tầng 2: pair (c.wallet) emit Sync → filter token của pair ---
+console.log("\n[Tang 2: pair emit Sync → filter tokens trong pair (AW/FIST case)]");
+
+const makeBalanceOfCall = (token, wallet) => ({
+  fn: "balanceOf(address)",
+  to: token,
+  wallet,
+});
+
+test("pair emit Sync → token cua pair bi loai (AW)", () => {
+  const set = new Set([AW, FIST, TOKEN_X]);
+  filterSync(
+    set,
+    [{ topics: [SYNC_TOPIC], address: PAIR_B }],
+    [makeBalanceOfCall(AW, PAIR_B), makeBalanceOfCall(FIST, PAIR_B)],
+  );
+  assert.ok(!set.has(AW), "AW phai bi loai");
+  assert.ok(!set.has(FIST), "FIST phai bi loai");
+  assert.ok(set.has(TOKEN_X), "TOKEN_X khong lien quan phai giu lai");
+});
+
+test("pair khong emit Sync → tokens giu nguyen", () => {
+  const set = new Set([AW, FIST]);
+  filterSync(
+    set,
+    [{ topics: ["0xother"], address: PAIR_B }],
+    [makeBalanceOfCall(AW, PAIR_B), makeBalanceOfCall(FIST, PAIR_B)],
+  );
+  assert.ok(set.has(AW));
+  assert.ok(set.has(FIST));
+});
+
+test("token trong pair khac emit Sync → khong anh huong", () => {
+  const set = new Set([AW, TOKEN_X]);
+  filterSync(
+    set,
+    [{ topics: [SYNC_TOPIC], address: PAIR_A }], // pair khac voi PAIR_B
+    [makeBalanceOfCall(AW, PAIR_B)],              // AW thuoc PAIR_B
+  );
+  assert.ok(set.has(AW), "AW phai giu vi pair cua no (PAIR_B) khong emit Sync");
+  assert.ok(set.has(TOKEN_X));
 });
 
 test("log rong → set giu nguyen", () => {
-  const set = new Set([BUSD, TOKEN_X]);
-  filterSyncEmitters(set, []);
-  assert.strictEqual(set.size, 2);
+  const set = new Set([AW, FIST, TOKEN_X]);
+  filterSync(set, [], [makeBalanceOfCall(AW, PAIR_B)]);
+  assert.strictEqual(set.size, 3);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);
