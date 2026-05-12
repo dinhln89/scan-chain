@@ -3,7 +3,7 @@ require("dotenv").config({
 });
 
 // Giảm RPC throttle cho batch job — CUPS error sẽ được retry tự động
-if (!process.env.RPC_INTERVAL_MS) process.env.RPC_INTERVAL_MS = "80";
+if (!process.env.RPC_INTERVAL_MS) process.env.RPC_INTERVAL_MS = "20";
 
 const { Op } = require("sequelize");
 const sequelize = require("../db");
