@@ -100,3 +100,4 @@ const IgnoreMethod = {
 };
 
 module.exports = IgnoreMethod;
+module.exports.parseCSV = parseCSV;
