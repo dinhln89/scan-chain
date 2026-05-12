@@ -29,10 +29,10 @@ function fetchUrl(url) {
 function parseCSV(text) {
   return text.split('\n').reduce((acc, line) => {
     line = line.trim();
-    const m = line.match(/^(0x[0-9a-fA-F]+),(.*)$/);
+    const m = line.match(/^(0x[0-9a-fA-F]+)(?:,(.*))?$/);
     if (!m) return acc;
     const sel = m[1].toLowerCase();
-    let comment = m[2].trim();
+    let comment = (m[2] ?? '').trim();
     if (comment.startsWith('"') && comment.endsWith('"')) comment = comment.slice(1, -1);
     acc[sel] = comment;
     return acc;

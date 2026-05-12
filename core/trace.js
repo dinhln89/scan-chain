@@ -60,7 +60,7 @@ async function syncIgnoreSwapFromSheet() {
   const csv = await fetchUrl(IGNORE_SWAP_SHEET_URL);
   let added = 0;
   for (const line of csv.split("\n")) {
-    const m = line.trim().match(/^(0x[0-9a-fA-F]{8}),(.*)$/);
+    const m = line.trim().match(/^(0x[0-9a-fA-F]{8})(?:,(.*))?$/);
     if (!m) continue;
     const sel = m[1].toLowerCase();
     let comment = m[2].trim().replace(/^"|"$/g, "");
