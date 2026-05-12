@@ -21,6 +21,45 @@ const ignoreSwap = {
   "0x128acb08": "swap",
   "0xfa461e33": "uniswapV3SwapCallback",
   "0x022c0d9f": "",
+  "0xc45a0155": "factory()",
+  "0xad5c4648": "WETH()",
+  "0xe8e33700":
+    "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
+  "0xf305d719":
+    "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+  "0xbaa2abde":
+    "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
+  "0x02751cec":
+    "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
+  "0x2195995c":
+    "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+  "0xded9382a":
+    "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+  "0xaf2979eb":
+    "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
+  "0x5b0d5984":
+    "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
+  "0x38ed1739":
+    "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
+  "0x8803dbee":
+    "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
+  "0x7ff36ab5": "swapExactETHForTokens(uint256,address[],address,uint256)",
+  "0x4a25d94a":
+    "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
+  "0x18cbafe5":
+    "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
+  "0xfb3bdb41": "swapETHForExactTokens(uint256,address[],address,uint256)",
+  "0x5c11d795":
+    "swapExactTokensForTokensSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  "0xb6f9de95":
+    "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
+  "0x791ac947":
+    "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
+  "0xad615dec": "quote(uint256,uint256,uint256)",
+  "0x054d50d4": "getAmountOut(uint256,uint256,uint256)",
+  "0x85f8c259": "getAmountIn(uint256,uint256,uint256)",
+  "0xd06ca61f": "getAmountsOut(uint256,address[])",
+  "0x1f00ca74": "getAmountsIn(uint256,address[])",
 };
 
 const BSC_RPC =
@@ -127,7 +166,10 @@ function hasSignatureInInput(input) {
     const chunk = data.slice(i, i + 64);
 
     // Format 1: packed 65-byte bytes (length = 0x41) → r(32)+s(32)+v(1)
-    if (chunk === "0000000000000000000000000000000000000000000000000000000000000041") {
+    if (
+      chunk ===
+      "0000000000000000000000000000000000000000000000000000000000000041"
+    ) {
       const sigStart = i + 64;
       if (sigStart + 130 > data.length) continue;
       const v = parseInt(data.slice(sigStart + 128, sigStart + 130), 16);
@@ -135,7 +177,10 @@ function hasSignatureInInput(input) {
     }
 
     // Format 3: ERC-4337 66-byte bytes (length = 0x42) → 0x00+r(32)+s(32)+v(1)
-    if (chunk === "0000000000000000000000000000000000000000000000000000000000000042") {
+    if (
+      chunk ===
+      "0000000000000000000000000000000000000000000000000000000000000042"
+    ) {
       const sigStart = i + 64;
       if (sigStart + 132 > data.length) continue;
       if (data.slice(sigStart, sigStart + 2) !== "00") continue;
@@ -145,8 +190,10 @@ function hasSignatureInInput(input) {
 
     // Format 2: ABI-separated v word (uint256 = 27 or 28)
     if (
-      chunk === "000000000000000000000000000000000000000000000000000000000000001b" ||
-      chunk === "000000000000000000000000000000000000000000000000000000000000001c"
+      chunk ===
+        "000000000000000000000000000000000000000000000000000000000000001b" ||
+      chunk ===
+        "000000000000000000000000000000000000000000000000000000000000001c"
     ) {
       if (i < 128) continue; // can't have r and s before this
       const r = data.slice(i - 128, i - 64);
@@ -381,7 +428,10 @@ const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
 async function simulateTx(to, input, blockNumber, txIndex) {
   const block =
     blockNumber != null && txIndex != null
-      ? { blockNumber: "0x" + Number(blockNumber).toString(16), transactionIndex: "0x" + Number(txIndex).toString(16) }
+      ? {
+          blockNumber: "0x" + Number(blockNumber).toString(16),
+          transactionIndex: "0x" + Number(txIndex).toString(16),
+        }
       : blockNumber != null
         ? "0x" + Number(blockNumber).toString(16)
         : "latest";
