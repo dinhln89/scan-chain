@@ -1,21 +1,31 @@
-require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../.env"),
+});
 
 const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
-const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
+const {
+  syncAll,
+  processTxData,
+  buildRow,
+} = require("../core/trace-tx-process");
 const { append, getRows } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
-const CONCURRENCY = 2;
-const FLUSH_EVERY = 20;
+const CONCURRENCY = 3;
+const FLUSH_EVERY = 10;
 const CUPS_DELAY = 2000;
 const MAX_RETRIES = 5;
 
 function isCupsError(err) {
-  return err.message?.includes("CUPS limit") || err.message?.includes("rate limit") || err.message?.includes("Too Many Requests");
+  return (
+    err.message?.includes("CUPS limit") ||
+    err.message?.includes("rate limit") ||
+    err.message?.includes("Too Many Requests")
+  );
 }
 
 async function reTraceTx(tx) {
@@ -31,7 +41,9 @@ async function reTraceTxWithRetry(tx) {
     } catch (err) {
       if (isCupsError(err)) {
         const delay = CUPS_DELAY * attempt;
-        console.log(`  CUPS limit, doi ${delay}ms roi thu lai (lan ${attempt}/${MAX_RETRIES})...`);
+        console.log(
+          `  CUPS limit, doi ${delay}ms roi thu lai (lan ${attempt}/${MAX_RETRIES})...`,
+        );
         await new Promise((r) => setTimeout(r, delay));
       } else {
         throw err;
@@ -52,13 +64,17 @@ async function main() {
   const hashes = rows.map((r) => r[0]).filter((h) => h && h.startsWith("0x"));
   console.log(`  Tim thay ${hashes.length} txHash tren sheet`);
 
-  const txs = await Transaction.findAll({ where: { hash: { [Op.in]: hashes } } });
+  const txs = await Transaction.findAll({
+    where: { hash: { [Op.in]: hashes } },
+  });
   const txMap = new Map(txs.map((tx) => [tx.hash, tx]));
   const notInDb = hashes.filter((h) => !txMap.has(h)).length;
   const toProcess = hashes.filter((h) => txMap.has(h));
   console.log(`  Co trong DB: ${toProcess.length} | Thieu: ${notInDb}`);
 
-  console.log(`[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY}, flush moi ${FLUSH_EVERY} rows)...`);
+  console.log(
+    `[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY}, flush moi ${FLUSH_EVERY} rows)...`,
+  );
   let idx = 0;
   let skipped = 0;
   let errors = 0;
@@ -74,12 +90,16 @@ async function main() {
     const batch = pending.splice(0, pending.length);
     try {
       await append(batch, { sheet: "Sheet5" });
-      console.log(`  => Flushed ${batch.length} rows vao Sheet5 (tong: ${totalDone})`);
+      console.log(
+        `  => Flushed ${batch.length} rows vao Sheet5 (tong: ${totalDone})`,
+      );
     } catch (err) {
       // Tra batch lai vao pending, khong mat du lieu
       pending.unshift(...batch);
       totalDone -= batch.length;
-      console.log(`  => Flush ERROR (${batch.length} rows tra lai queue): ${err.message}`);
+      console.log(
+        `  => Flush ERROR (${batch.length} rows tra lai queue): ${err.message}`,
+      );
     }
     flushing = false;
   }
@@ -101,7 +121,9 @@ async function main() {
         }
       } catch (err) {
         errors++;
-        console.log(`  [${i + 1}/${toProcess.length}] ERROR: ${tx.hash}: ${err.message}`);
+        console.log(
+          `  [${i + 1}/${toProcess.length}] ERROR: ${tx.hash}: ${err.message}`,
+        );
       }
     }
   }
@@ -109,7 +131,9 @@ async function main() {
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
   await flush(true);
 
-  console.log(`[4/4] Xong. Done=${totalDone} Skipped=${skipped} Errors=${errors + notInDb}`);
+  console.log(
+    `[4/4] Xong. Done=${totalDone} Skipped=${skipped} Errors=${errors + notInDb}`,
+  );
   await sequelize.close();
 }
 
