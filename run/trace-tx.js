@@ -124,6 +124,20 @@ async function processTx(tx, txData) {
       : Promise.resolve([]),
   ]);
 
+  // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
+  const pairSet = new Set(swapPairWallets);
+  const tokenAddrsOnPairs = [
+    ...new Set(
+      calls
+        .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+        .map((c) => c.to?.toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const pairTokenSymbols = await Promise.all(
+    tokenAddrsOnPairs.map((addr) => getErc20Symbol(addr).then((s) => s || addr)),
+  );
+
   const now = new Date();
 
   // Sheet4: contract có thể mint/transfer ERC20 và không revert khi simulate
@@ -154,8 +168,8 @@ async function processTx(tx, txData) {
         `https://bscscan.com/tx/${tx.hash}`,
         symbol,
         isCallInput ? "YES" : "",
-        getReservesParentSelectors.join(","),
-        swapPairWallets.length > 0 ? "YES" : "",
+        getReservesParentSelectors.join(", "),
+        pairTokenSymbols.join(","),
         selector ?? "",
         tx.blockNumber,
         now.toLocaleString(),

@@ -73,6 +73,20 @@ async function reTraceTx(tx) {
     isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
   ]);
 
+  // Lấy symbol của các token gọi balanceOf đến pair đã xác nhận
+  const pairSet = new Set(swapPairWallets);
+  const tokenAddrsOnPairs = [
+    ...new Set(
+      calls
+        .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+        .map((c) => c.to?.toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const pairTokenSymbols = await Promise.all(
+    tokenAddrsOnPairs.map((addr) => getErc20Symbol(addr).then((s) => s || addr)),
+  );
+
   return [
     tx.hash,
     `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
@@ -80,7 +94,7 @@ async function reTraceTx(tx) {
     symbol,
     isCallInput ? "YES" : "",
     getReservesParentSelectors.join(","),
-    swapPairWallets.length > 0 ? "YES" : "",
+    pairTokenSymbols.join(","),
     isTransferFromErc20 && simulateResult?.notRevert ? "YES" : "",
     selector ?? "",
     tx.blockNumber,
