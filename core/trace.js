@@ -450,6 +450,7 @@ async function analyzeTx(txHash, txData = null) {
   return {
     addresses,
     calls,
+    logs: receipt?.logs || [],
     hasSignature: hasSignatureInInput(tx.input),
     isCallInput,
     isTransferFromErc20,

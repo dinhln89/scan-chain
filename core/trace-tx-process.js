@@ -85,6 +85,7 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
 async function processTxData(tx) {
   const {
     calls,
+    logs,
     transfers,
     isTransferSender,
     isTransferFromErc20,
@@ -153,11 +154,33 @@ async function processTxData(tx) {
   const inputCallAddrs = [...calledFromInput].map((a) => a.slice(0, 10)).join(", ");
 
   // Bước 2: loại khỏi swapPairBalanceOfs nếu:
-  //   - có call 0x022c0d9f đến địa chỉ đó (là pair, không phải token)
+  //   - token address emit Sync → thực ra là pair, không phải token
+  //   - PAIR (c.wallet) emit Sync → balanceOf là internal của swap, không phải discovery
   //   - địa chỉ đó đã là confirmed pair
-  //   - địa chỉ đó nằm trong inputAddrs (đã được truyền explicit vào function, không cần discover)
+  //   - địa chỉ đó nằm trong inputAddrs (explicit parameter, không cần discover)
+  //   - balanceOf của nó có parentSelector nằm trong getReservesParentSelectors
+  //     (cùng hàm DEX nội bộ với getReserves → không phải discovery từ ngoài)
+  const SYNC_TOPIC = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+  const syncEmitters = new Set(
+    logs
+      .filter((l) => l.topics?.[0]?.toLowerCase() === SYNC_TOPIC)
+      .map((l) => l.address?.toLowerCase())
+      .filter(Boolean),
+  );
+  const getReservesParentSet = new Set(getReservesParentSelectors);
+
+  // token địa chỉ emit Sync → là pair
+  for (const addr of syncEmitters) {
+    swapPairBalanceOfs.delete(addr);
+  }
+  // pair (c.wallet) emit Sync → token này là reserve của swap, không cần discover
   for (const c of calls) {
-    if (c.input?.slice(0, 10)?.toLowerCase() === "0x022c0d9f" && c.to) {
+    if (
+      c.fn === "balanceOf(address)" &&
+      c.wallet &&
+      syncEmitters.has(c.wallet.toLowerCase()) &&
+      c.to
+    ) {
       swapPairBalanceOfs.delete(c.to.toLowerCase());
     }
   }
@@ -166,6 +189,17 @@ async function processTxData(tx) {
   }
   for (const addr of inputAddrs) {
     swapPairBalanceOfs.delete(addr);
+  }
+  for (const c of calls) {
+    if (
+      c.fn === "balanceOf(address)" &&
+      c.wallet &&
+      pairSet.has(c.wallet.toLowerCase()) &&
+      c.to &&
+      getReservesParentSet.has(c.parentSelector)
+    ) {
+      swapPairBalanceOfs.delete(c.to.toLowerCase());
+    }
   }
 
   // Bước 3: tokenAddrsOnPairs = swapPairBalanceOfs sau khi lọc
