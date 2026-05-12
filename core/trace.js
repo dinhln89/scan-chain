@@ -158,7 +158,7 @@ function extractCalls(calls = [], results = [], parentSelector = null) {
         parentSelector,
       });
     }
-    if (selector && !ignoreSwap[selector]) {
+    if (selector && !(selector in ignoreSwap)) {
       if (call.calls) extractCalls(call.calls, results, selector);
     }
   }
