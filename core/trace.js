@@ -48,15 +48,30 @@ function setRpcHandler(fn) {
   _rpcHandler = fn;
 }
 
+// Serialize tất cả RPC calls qua 1 queue với delay tối thiểu giữa mỗi call
+const RPC_INTERVAL_MS = parseInt(process.env.RPC_INTERVAL_MS || "150", 10);
+let _rpcChain = Promise.resolve();
+
+function enqueueRpc(fn) {
+  const result = _rpcChain.then(fn);
+  _rpcChain = result.then(
+    () => new Promise((r) => setTimeout(r, RPC_INTERVAL_MS)),
+    () => new Promise((r) => setTimeout(r, RPC_INTERVAL_MS)),
+  );
+  return result;
+}
+
 async function rawRpc(method, params) {
-  const res = await fetch(BSC_RPC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  return enqueueRpc(async () => {
+    const res = await fetch(BSC_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message);
+    return json.result;
   });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message);
-  return json.result;
 }
 
 async function rpc(method, params) {
@@ -69,20 +84,22 @@ async function batchRpc(requests) {
   if (_rpcHandler) {
     return Promise.all(requests.map((r) => _rpcHandler(r.method, r.params)));
   }
-  const res = await fetch(BSC_RPC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(
-      requests.map((r, i) => ({
-        jsonrpc: "2.0",
-        id: i,
-        method: r.method,
-        params: r.params,
-      })),
-    ),
+  return enqueueRpc(async () => {
+    const res = await fetch(BSC_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        requests.map((r, i) => ({
+          jsonrpc: "2.0",
+          id: i,
+          method: r.method,
+          params: r.params,
+        })),
+      ),
+    });
+    const json = await res.json();
+    return json.map((r) => (r.error ? null : r.result));
   });
-  const json = await res.json();
-  return json.map((r) => (r.error ? null : r.result));
 }
 
 const SELECTORS = {
