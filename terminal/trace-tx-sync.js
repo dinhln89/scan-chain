@@ -96,41 +96,53 @@ async function reTraceTx(tx) {
 }
 
 async function main() {
+  console.log("[1/5] Ket noi DB...");
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  console.log("[1/5] DB san sang");
 
-  log.info("Doc danh sach txHash tu Sheet1...");
+  console.log("[2/5] Doc danh sach txHash tu Sheet1...");
   const rows = await getRows({ sheet: "Sheet1" });
   const hashes = rows.map((r) => r[0]).filter((h) => h && h.startsWith("0x"));
-  log.info(`Tim thay ${hashes.length} txHash`);
+  console.log(`[2/5] Tim thay ${hashes.length} txHash`);
 
+  console.log("[3/5] Bat dau re-trace...");
   let done = 0;
   let skipped = 0;
   let errors = 0;
 
   for (const hash of hashes) {
+    process.stdout.write(`  [${done + skipped + errors + 1}/${hashes.length}] ${hash} ... `);
+
     const tx = await Transaction.findOne({ where: { hash } });
     if (!tx) {
-      log.warn(`Khong co trong DB: ${hash}`);
+      console.log("SKIP (khong co trong DB)");
       skipped++;
       continue;
     }
+
     try {
+      console.log("");
+      console.log(`    analyzeTx...`);
       const appended = await reTraceTx(tx);
       if (appended) {
         done++;
-        log.info(`[${done}/${hashes.length}] DONE: ${hash}`);
+        console.log(`    => append Sheet5 DONE`);
       } else {
         skipped++;
+        console.log(`    => SKIP (khong pass filter)`);
       }
     } catch (err) {
       errors++;
-      log.error(`Loi ${hash}: ${err.message}`);
+      console.log(`    => ERROR: ${err.message}`);
     }
   }
 
-  log.info(`Xong. Done=${done} Skipped=${skipped} Errors=${errors}`);
+  console.log(`[4/5] Tong ket: Done=${done} Skipped=${skipped} Errors=${errors}`);
+
+  console.log("[5/5] Dong DB...");
   await sequelize.close();
+  console.log("[5/5] Xong.");
 }
 
 main().catch((err) => {
