@@ -160,10 +160,13 @@ async function processTxData(tx) {
   //   - địa chỉ đó nằm trong inputAddrs (explicit parameter, không cần discover)
   //   - balanceOf của nó có parentSelector nằm trong getReservesParentSelectors
   //     (cùng hàm DEX nội bộ với getReserves → không phải discovery từ ngoài)
-  const SYNC_TOPIC = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+  const SYNC_TOPICS = new Set([
+    "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1", // V2 Sync
+    "0xcf2aa50876cdfbb541206f89af0ee78d44a2abf8d328e37fa4917f982149848a", // V3 Sync
+  ]);
   const syncEmitters = new Set(
     logs
-      .filter((l) => l.topics?.[0]?.toLowerCase() === SYNC_TOPIC)
+      .filter((l) => SYNC_TOPICS.has(l.topics?.[0]?.toLowerCase()))
       .map((l) => l.address?.toLowerCase())
       .filter(Boolean),
   );

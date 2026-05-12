@@ -1,12 +1,17 @@
 const assert = require("assert");
 
-const SYNC_TOPIC = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+const SYNC_TOPICS = new Set([
+  "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1", // V2 Sync
+  "0xcf2aa50876cdfbb541206f89af0ee78d44a2abf8d328e37fa4917f982149848a", // V3 Sync
+]);
+const SYNC_TOPIC_V2 = "0x1c411e9a96e071241c2f21f7726b17ae89e3cab4c78be50e062b03a9fffbbad1";
+const SYNC_TOPIC_V3 = "0xcf2aa50876cdfbb541206f89af0ee78d44a2abf8d328e37fa4917f982149848a";
 
 // Giống hệt logic trong trace-tx-process.js — 2 tầng filter
 function filterSync(swapPairBalanceOfs, logs, calls) {
   const syncEmitters = new Set(
     logs
-      .filter((l) => l.topics?.[0]?.toLowerCase() === SYNC_TOPIC)
+      .filter((l) => SYNC_TOPICS.has(l.topics?.[0]?.toLowerCase()))
       .map((l) => l.address?.toLowerCase())
       .filter(Boolean),
   );
@@ -91,10 +96,29 @@ test("log khong co topics → bo qua", () => {
   assert.ok(set.has(BUSD));
 });
 
-test("Sync topic case-insensitive", () => {
+test("V2 Sync topic case-insensitive", () => {
   const set = new Set([BUSD]);
-  filterSync(set, [{ topics: [SYNC_TOPIC.toUpperCase()], address: BUSD }], []);
+  filterSync(set, [{ topics: [SYNC_TOPIC_V2.toUpperCase()], address: BUSD }], []);
   assert.ok(!set.has(BUSD));
+});
+
+test("V3 Sync topic → bi loai", () => {
+  const set = new Set([BUSD, TOKEN_X]);
+  filterSync(set, [{ topics: [SYNC_TOPIC_V3], address: BUSD }], []);
+  assert.ok(!set.has(BUSD));
+  assert.ok(set.has(TOKEN_X));
+});
+
+test("V3 pair emit Sync → filter tokens cua pair", () => {
+  const set = new Set([AW, FIST, TOKEN_X]);
+  filterSync(
+    set,
+    [{ topics: [SYNC_TOPIC_V3], address: PAIR_B }],
+    [makeBalanceOfCall(AW, PAIR_B), makeBalanceOfCall(FIST, PAIR_B)],
+  );
+  assert.ok(!set.has(AW));
+  assert.ok(!set.has(FIST));
+  assert.ok(set.has(TOKEN_X));
 });
 
 // --- Tầng 2: pair (c.wallet) emit Sync → filter token của pair ---
