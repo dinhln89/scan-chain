@@ -86,7 +86,8 @@ async function reTraceTx(tx) {
   ];
 }
 
-const CONCURRENCY = 3;
+const CONCURRENCY = 2;
+const FLUSH_EVERY = 20;
 const CUPS_DELAY = 2000;
 const MAX_RETRIES = 5;
 
@@ -127,11 +128,28 @@ async function main() {
   const toProcess = hashes.filter((h) => txMap.has(h));
   console.log(`  Co trong DB: ${toProcess.length} | Thieu: ${notInDb}`);
 
-  console.log(`[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY})...`);
+  console.log(`[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY}, flush moi ${FLUSH_EVERY} rows)...`);
   let idx = 0;
   let skipped = 0;
   let errors = 0;
-  const resultRows = [];
+  let totalDone = 0;
+  const pending = [];
+  let flushing = false;
+
+  async function flush(force = false) {
+    if (flushing) return;
+    if (!force && pending.length < FLUSH_EVERY) return;
+    if (pending.length === 0) return;
+    flushing = true;
+    const batch = pending.splice(0, pending.length);
+    try {
+      await append(batch, { sheet: "Sheet5" });
+      console.log(`  => Flushed ${batch.length} rows vao Sheet5 (tong: ${totalDone})`);
+    } catch (err) {
+      console.log(`  => Flush ERROR: ${err.message}`);
+    }
+    flushing = false;
+  }
 
   async function worker() {
     while (idx < toProcess.length) {
@@ -140,8 +158,10 @@ async function main() {
       try {
         const row = await reTraceTxWithRetry(tx);
         if (row) {
-          resultRows.push(row);
+          pending.push(row);
+          totalDone++;
           console.log(`  [${i + 1}/${toProcess.length}] DONE: ${tx.hash}`);
+          await flush();
         } else {
           skipped++;
           console.log(`  [${i + 1}/${toProcess.length}] SKIP: ${tx.hash}`);
@@ -154,13 +174,9 @@ async function main() {
   }
 
   await Promise.all(Array.from({ length: CONCURRENCY }, worker));
+  await flush(true);
 
-  if (resultRows.length > 0) {
-    console.log(`  Append ${resultRows.length} rows vao Sheet5...`);
-    await append(resultRows, { sheet: "Sheet5" });
-  }
-
-  console.log(`[4/4] Xong. Done=${resultRows.length} Skipped=${skipped} Errors=${errors + notInDb}`);
+  console.log(`[4/4] Xong. Done=${totalDone} Skipped=${skipped} Errors=${errors + notInDb}`);
   await sequelize.close();
 }
 
