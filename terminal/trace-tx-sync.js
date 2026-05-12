@@ -15,7 +15,7 @@ const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
-const CONCURRENCY = 3;
+const CONCURRENCY = 4;
 const FLUSH_EVERY = 10;
 const CUPS_DELAY = 2000;
 const MAX_RETRIES = 5;
