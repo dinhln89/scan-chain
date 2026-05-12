@@ -5,7 +5,7 @@ const Transaction = require("../models/Transaction");
 const Contract = require("../models/Contract");
 const IgnoreAddress = require("../core/ignore-address");
 const IgnoreMethod = require("../core/ignore-method");
-const { hasV3PathInInput, hasSignatureInInput } = require("../core/trace");
+const { hasV3PathInInput, hasSignatureInInput, syncIgnoreSwapFromSheet } = require("../core/trace");
 const { sendMessage } = require("../core/telegram");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
@@ -149,6 +149,7 @@ async function main() {
   await sequelize.sync();
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
+  await syncIgnoreSwapFromSheet();
   log.info("Bat dau lang nghe BSC...");
 
   const loop = async () => {
