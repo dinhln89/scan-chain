@@ -1,5 +1,6 @@
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
+const { Op } = require("sequelize");
 const sequelize = require("../db");
 const Contract = require("../models/Contract");
 const Transaction = require("../models/Transaction");
@@ -52,8 +53,6 @@ async function reTraceTx(tx) {
     selector,
     transactionIndex,
   } = await analyzeTx(tx.hash, { from: tx.from, to: tx.to, input: tx.input });
-  console.log(`    analyzeTx: isTransferFromErc20=${isTransferFromErc20} isTransferSender=${isTransferSender}`);
-
   if (!isTransferFromErc20 && !isTransferSender) return false;
 
   const firstToSender = transfers.find((t) => t.to.toLowerCase() === tx.from.toLowerCase());
@@ -64,7 +63,6 @@ async function reTraceTx(tx) {
     ...new Set(calls.filter((c) => c.fn === "balanceOf(address)" && c.wallet).map((c) => c.wallet.toLowerCase())),
   ];
 
-  console.log(`    symbol+simulate+pairs...`);
   const [symbol, simulateResult, swapPairWallets] = await Promise.all([
     firstToSender ? getErc20Symbol(firstToSender.token).then((s) => s || "") : Promise.resolve(""),
     isTransferFromErc20
@@ -72,11 +70,8 @@ async function reTraceTx(tx) {
       : Promise.resolve(null),
     isTransferSender ? resolveSwapPairs(balanceOfWallets, getReservesAddrs) : Promise.resolve([]),
   ]);
-  console.log(`    symbol="${symbol}" notRevert=${simulateResult?.notRevert ?? "-"} pairs=${swapPairWallets.length}`);
-
   const now = new Date();
 
-  console.log(`    append Sheet5...`);
   await append(
     [
       [
@@ -99,53 +94,55 @@ async function reTraceTx(tx) {
   return true;
 }
 
+const CONCURRENCY = 5;
+
 async function main() {
-  console.log("[1/5] Ket noi DB...");
+  console.log("[1/4] Ket noi DB...");
   await sequelize.ensureDatabase();
   await sequelize.sync();
-  console.log("[1/5] DB san sang");
 
-  console.log("[2/5] Doc danh sach txHash tu Sheet1...");
+  console.log("[2/4] Doc Sheet1 va fetch DB...");
   const rows = await getRows({ sheet: "Sheet1" });
   const hashes = rows.map((r) => r[0]).filter((h) => h && h.startsWith("0x"));
-  console.log(`[2/5] Tim thay ${hashes.length} txHash`);
+  console.log(`  Tim thay ${hashes.length} txHash tren sheet`);
 
-  console.log("[3/5] Bat dau re-trace...");
+  const txs = await Transaction.findAll({ where: { hash: { [Op.in]: hashes } } });
+  const txMap = new Map(txs.map((tx) => [tx.hash, tx]));
+  const notInDb = hashes.filter((h) => !txMap.has(h)).length;
+  const toProcess = hashes.filter((h) => txMap.has(h));
+  console.log(`  Co trong DB: ${toProcess.length} | Thieu: ${notInDb}`);
+
+  console.log(`[3/4] Re-trace ${toProcess.length} tx (CONCURRENCY=${CONCURRENCY})...`);
   let done = 0;
   let skipped = 0;
   let errors = 0;
+  let idx = 0;
 
-  for (const hash of hashes) {
-    process.stdout.write(`  [${done + skipped + errors + 1}/${hashes.length}] ${hash} ... `);
-
-    const tx = await Transaction.findOne({ where: { hash } });
-    if (!tx) {
-      console.log("SKIP (khong co trong DB)");
-      skipped++;
-      continue;
-    }
-
-    try {
-      console.log("");
-      const appended = await reTraceTx(tx);
-      if (appended) {
-        done++;
-        console.log(`    => DONE`);
-      } else {
-        skipped++;
-        console.log(`    => SKIP (khong pass filter)`);
+  async function worker() {
+    while (idx < toProcess.length) {
+      const i = idx++;
+      const hash = toProcess[i];
+      const tx = txMap.get(hash);
+      try {
+        const appended = await reTraceTx(tx);
+        if (appended) {
+          done++;
+          console.log(`  [${i + 1}/${toProcess.length}] DONE: ${hash}`);
+        } else {
+          skipped++;
+          console.log(`  [${i + 1}/${toProcess.length}] SKIP: ${hash}`);
+        }
+      } catch (err) {
+        errors++;
+        console.log(`  [${i + 1}/${toProcess.length}] ERROR: ${hash}: ${err.message}`);
       }
-    } catch (err) {
-      errors++;
-      console.log(`    => ERROR: ${err.message}`);
     }
   }
 
-  console.log(`[4/5] Tong ket: Done=${done} Skipped=${skipped} Errors=${errors}`);
+  await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
-  console.log("[5/5] Dong DB...");
+  console.log(`[4/4] Xong. Done=${done} Skipped=${skipped} Errors=${errors + notInDb}`);
   await sequelize.close();
-  console.log("[5/5] Xong.");
 }
 
 main().catch((err) => {
