@@ -2,6 +2,7 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
+const https = require("https");
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
 const { sendMessage } = require("./telegram");
@@ -37,6 +38,39 @@ const ignoreSwap = {
   "0x02751cec": "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
   "0x022c0d9f": "",
 };
+
+const IGNORE_SWAP_SHEET_URL =
+  "https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1458691919";
+
+function fetchUrl(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return resolve(fetchUrl(res.headers.location));
+      }
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => resolve(data));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+async function syncIgnoreSwapFromSheet() {
+  const csv = await fetchUrl(IGNORE_SWAP_SHEET_URL);
+  let added = 0;
+  for (const line of csv.split("\n")) {
+    const m = line.trim().match(/^(0x[0-9a-fA-F]{8}),(.*)$/);
+    if (!m) continue;
+    const sel = m[1].toLowerCase();
+    let comment = m[2].trim().replace(/^"|"$/g, "");
+    if (!(sel in ignoreSwap)) {
+      ignoreSwap[sel] = comment;
+      added++;
+    }
+  }
+  return added;
+}
 
 const BSC_RPC =
   process.env.BSC_RPC ||
@@ -457,5 +491,6 @@ module.exports = {
   rpc,
   setRpcHandler,
   simulateTx,
+  syncIgnoreSwapFromSheet,
   tokenCache: _tokenCache,
 };
