@@ -6,7 +6,11 @@ const { createLogger } = require('./logger');
 const log = createLogger(__filename);
 
 const FILE = path.resolve(__dirname, '../data/ignore-methods.json');
-const SHEET_URL = 'https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1198058145';
+const SPREADSHEET_ID = '1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs';
+const SHEET_URLS = [
+  `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=1198058145`, // Sheet2
+  `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/export?format=csv&gid=1458691919`, // ignoreSwapSheet
+];
 
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
@@ -63,14 +67,16 @@ const IgnoreMethod = {
   },
 
   async syncFromSheet() {
-    const csv = await fetchUrl(SHEET_URL);
-    const remote = parseCSV(csv);
+    const csvList = await Promise.all(SHEET_URLS.map(fetchUrl));
     const data = load();
     let added = 0;
-    for (const [sel, comment] of Object.entries(remote)) {
-      if (!(sel in data)) {
-        data[sel] = comment;
-        added++;
+    for (const csv of csvList) {
+      const remote = parseCSV(csv);
+      for (const [sel, comment] of Object.entries(remote)) {
+        if (!(sel in data)) {
+          data[sel] = comment;
+          added++;
+        }
       }
     }
     if (added > 0) {
