@@ -6,7 +6,7 @@ const {
   extractAddressesFromInput,
   getErc20Symbol,
   simulateTx,
-  syncIgnoreSwapFromSheet,
+  syncIgnoreSwap,
 } = require("./trace");
 
 // Top 100 token BEP20 nổi tiếng trên BSC — không có giá trị signal trong inputCallAddrs
@@ -136,7 +136,8 @@ const WELL_KNOWN_TOKENS = new Set([
 // Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
 async function syncAll() {
   await IgnoreMethod.syncFromSheet();
-  await syncIgnoreSwapFromSheet();
+  // Rebuild ignoreSwap (dùng trong extractCalls) từ IgnoreMethod đã sync
+  syncIgnoreSwap();
 }
 
 module.exports.syncAll = syncAll;
