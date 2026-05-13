@@ -299,6 +299,55 @@ async function getErc20Symbol(tokenAddress) {
   return symbol;
 }
 
+async function getErc20SymbolBatch(addresses) {
+  if (addresses.length === 0) return [];
+  const addrs = addresses.map((a) => a.toLowerCase());
+  const symbols = new Array(addrs.length).fill(undefined);
+
+  const needsLookup = [];
+  for (let i = 0; i < addrs.length; i++) {
+    if (_tokenCache.has(addrs[i])) {
+      symbols[i] = _tokenCache.get(addrs[i]);
+    } else {
+      needsLookup.push(i);
+    }
+  }
+  if (needsLookup.length === 0) return symbols;
+
+  try {
+    const rows = await Token.findAll({ where: { address: needsLookup.map((i) => addrs[i]) } });
+    const dbMap = new Map(rows.map((r) => [r.address, r.symbol]));
+    for (const i of needsLookup) {
+      if (dbMap.has(addrs[i])) {
+        symbols[i] = dbMap.get(addrs[i]);
+        _tokenCache.set(addrs[i], symbols[i]);
+      }
+    }
+  } catch {}
+
+  const needsRpc = needsLookup.filter((i) => symbols[i] === undefined);
+  if (needsRpc.length === 0) return symbols;
+
+  const results = await batchRpc(
+    needsRpc.map((i) => ({
+      method: "eth_call",
+      params: [{ to: addrs[i], data: "0x95d89b41" }, "latest"],
+    })),
+  );
+
+  for (let j = 0; j < needsRpc.length; j++) {
+    const i = needsRpc[j];
+    symbols[i] = decodeErc20StringResult(results[j]);
+    _tokenCache.set(addrs[i], symbols[i]);
+  }
+
+  try {
+    await Promise.all(needsRpc.map((i) => Token.upsert({ address: addrs[i], symbol: symbols[i] })));
+  } catch {}
+
+  return symbols;
+}
+
 // txData co the truyen tu DB de bo qua eth_getTransactionByHash
 async function analyzeTx(txHash, txData = null) {
   // Pre-filter using txData before any RPC — avoids receipt call for ignored txs
@@ -444,6 +493,7 @@ module.exports = {
   extractCalls,
   getErc20Name,
   getErc20Symbol,
+  getErc20SymbolBatch,
   hasSignatureInInput,
   hasV3PathInInput,
   rawRpc,

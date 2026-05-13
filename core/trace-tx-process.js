@@ -4,7 +4,7 @@ const {
   analyzeTx,
   batchRpc,
   extractAddressesFromInput,
-  getErc20Symbol,
+  getErc20SymbolBatch,
   simulateTx,
   syncIgnoreSwap,
 } = require("./trace");
