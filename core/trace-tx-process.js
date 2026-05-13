@@ -275,8 +275,18 @@ async function processTxData(tx) {
   const calledFromInput = new Set(
     calls.map((c) => c.to?.toLowerCase()).filter((a) => a && inputAddrs.has(a)),
   );
+
+  // Địa chỉ chỉ nhận fallback call (input rỗng/0x) → không có ý nghĩa signal
+  const fallbackOnlyAddrs = new Set(
+    [...calledFromInput].filter((addr) =>
+      calls
+        .filter((c) => c.to?.toLowerCase() === addr)
+        .every((c) => !c.input || c.input === "0x"),
+    ),
+  );
+
   const inputCallAddrs = [...calledFromInput]
-    .filter((a) => !WELL_KNOWN_TOKENS.has(a))
+    .filter((a) => !WELL_KNOWN_TOKENS.has(a) && !fallbackOnlyAddrs.has(a))
     .map((a) => a.slice(0, 10))
     .join(", ");
 
