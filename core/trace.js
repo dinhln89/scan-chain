@@ -86,7 +86,7 @@ const SELECTORS = {
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-function extractCalls(calls = [], results = [], parentSelector = null, ignoreSet = null) {
+function extractCalls(calls = [], results = [], parentSelector = null) {
   for (const call of calls) {
     const selector = call.input?.slice(0, 10)?.toLowerCase();
     if (selector || SELECTORS[selector]) {
@@ -99,8 +99,8 @@ function extractCalls(calls = [], results = [], parentSelector = null, ignoreSet
         parentSelector,
       });
     }
-    if (selector && !(ignoreSet ? ignoreSet.has(selector) : false)) {
-      if (call.calls) extractCalls(call.calls, results, selector, ignoreSet);
+    if (selector && !ignoreSwap.has(selector)) {
+      if (call.calls) extractCalls(call.calls, results, selector);
     }
   }
   return results;
@@ -363,7 +363,7 @@ async function analyzeTx(txHash, txData = null) {
     txHash,
     { tracer: "callTracer" },
   ]);
-  calls = extractCalls([trace, ...(trace.calls || [])], [], null, IgnoreMethod.getAll());
+  calls = extractCalls([trace, ...(trace.calls || [])]);
 
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
@@ -435,6 +435,6 @@ module.exports = {
   rpc,
   setRpcHandler,
   simulateTx,
-
+  syncIgnoreSwap,
   tokenCache: _tokenCache,
 };
