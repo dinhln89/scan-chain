@@ -283,9 +283,21 @@ async function processTxData(tx) {
     ),
   );
 
+  // Map address → selector đầu tiên được gọi (dùng cho inputCallAddrs display)
+  const firstSelectorByAddr = new Map();
+  for (const c of calls) {
+    const addr = c.to?.toLowerCase();
+    if (addr && c.selector && !firstSelectorByAddr.has(addr)) {
+      firstSelectorByAddr.set(addr, c.selector);
+    }
+  }
+
   const inputCallAddrs = [...calledFromInput]
     .filter((a) => !WELL_KNOWN_TOKENS.has(a) && !fallbackOnlyAddrs.has(a))
-    .map((a) => a.slice(0, 10))
+    .map((a) => {
+      const sel = firstSelectorByAddr.get(a);
+      return sel ? `${a.slice(0, 10)} => ${sel}` : a.slice(0, 10);
+    })
     .join(", ");
 
   // Bước 2: loại khỏi swapPairBalanceOfs nếu:
