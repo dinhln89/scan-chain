@@ -2,75 +2,16 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
-const https = require("https");
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
 const { sendMessage } = require("./telegram");
 
-const ignoreSwap = {
-  "0xfff6cae9": "",
-  "0xfc1c1b21": "borrowTokenFromCollateral",
-  "0xfb3bdb41": "swapETHForExactTokens(uint256,address[],address,uint256)",
-  "0xfa461e33": "uniswapV3SwapCallback",
-  "0xf305d719": "addLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
-  "0xf2c42696": "dagSwapByOrderId(uint256,uint256,uint256,address,uint256)",
-  "0xe8e33700": "addLiquidity(address,address,uint256,uint256,uint256,uint256,address,uint256)",
-  "0xded9382a": "removeLiquidityETHWithPermit(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0xd06ca61f": "getAmountsOut(uint256,address[])",
-  "0xc45a0155": "factory()",
-  "0xbaa2abde": "removeLiquidity(address,address,uint256,uint256,uint256,address,uint256)",
-  "0xb6f9de95": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
-  "0xaf2979eb": "removeLiquidityETHSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256)",
-  "0xad615dec": "quote(uint256,uint256,uint256)",
-  "0xad5c4648": "WETH()",
-  "0x8803dbee": "swapTokensForExactTokens(uint256,uint256,address[],address,uint256)",
-  "0x85f8c259": "getAmountIn(uint256,uint256,uint256)",
-  "0x7ff36ab5": "swapExactETHForTokensSupportingFeeOnTransferTokens(uint256,address[],address,uint256)",
-  "0x791ac947": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0x5c11d795": "swapExactTokensForETHSupportingFeeOnTransferTokens(uint256,uint256,address[],address,uint256)",
-  "0x5b0d5984": "removeLiquidityETHWithPermitSupportingFeeOnTransferTokens(address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0x4a25d94a": "swapTokensForExactETH(uint256,uint256,address[],address,uint256)",
-  "0x38ed1739": "swapExactTokensForTokens(uint256,uint256,address[],address,uint256)",
-  "0x2195995c": "removeLiquidityWithPermit(address,address,uint256,uint256,uint256,address,uint256,bool,uint8,bytes32,bytes32)",
-  "0x1f00ca74": "getAmountsIn(uint256,address[])",
-  "0x18cbafe5": "swapExactETHForTokens(uint256,address[],address,uint256)",
-  "0x128acb08": "swap",
-  "0x054d50d4": "getAmountOut(uint256,uint256,uint256)",
-  "0x02751cec": "removeLiquidityETH(address,uint256,uint256,uint256,address,uint256)",
-  "0x022c0d9f": "",
-};
+// Cache của IgnoreMethod — dùng trong extractCalls để quyết định có đệ quy không.
+// Được rebuild sau khi IgnoreMethod.syncFromSheet() hoàn tất.
+let ignoreSwap = new Set();
 
-const IGNORE_SWAP_SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/export?format=csv&gid=1458691919";
-
-function fetchUrl(url) {
-  return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return resolve(fetchUrl(res.headers.location));
-      }
-      let data = "";
-      res.on("data", (chunk) => (data += chunk));
-      res.on("end", () => resolve(data));
-      res.on("error", reject);
-    }).on("error", reject);
-  });
-}
-
-async function syncIgnoreSwapFromSheet() {
-  const csv = await fetchUrl(IGNORE_SWAP_SHEET_URL);
-  let added = 0;
-  for (const line of csv.split("\n")) {
-    const m = line.trim().match(/^(0x[0-9a-fA-F]{8})(?:,(.*))?$/);
-    if (!m) continue;
-    const sel = m[1].toLowerCase();
-    let comment = (m[2] ?? "").trim().replace(/^"|"$/g, "");
-    if (!(sel in ignoreSwap)) {
-      ignoreSwap[sel] = comment;
-      added++;
-    }
-  }
-  return added;
+function syncIgnoreSwap() {
+  ignoreSwap = IgnoreMethod.getAll();
 }
 
 const BSC_RPC =
@@ -145,7 +86,7 @@ const SELECTORS = {
 const TRANSFER_TOPIC =
   "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef";
 
-function extractCalls(calls = [], results = [], parentSelector = null) {
+function extractCalls(calls = [], results = [], parentSelector = null, ignoreSet = null) {
   for (const call of calls) {
     const selector = call.input?.slice(0, 10)?.toLowerCase();
     if (selector || SELECTORS[selector]) {
@@ -158,8 +99,8 @@ function extractCalls(calls = [], results = [], parentSelector = null) {
         parentSelector,
       });
     }
-    if (selector && !(selector in ignoreSwap)) {
-      if (call.calls) extractCalls(call.calls, results, selector);
+    if (selector && !(ignoreSet ? ignoreSet.has(selector) : false)) {
+      if (call.calls) extractCalls(call.calls, results, selector, ignoreSet);
     }
   }
   return results;
@@ -422,7 +363,7 @@ async function analyzeTx(txHash, txData = null) {
     txHash,
     { tracer: "callTracer" },
   ]);
-  calls = extractCalls([trace, ...(trace.calls || [])]);
+  calls = extractCalls([trace, ...(trace.calls || [])], [], null, IgnoreMethod.getAll());
 
   calls.forEach((c) => {
     if (c.fn === "getReserves()") c.decoded = decodeGetReserves(c.output);
@@ -494,6 +435,6 @@ module.exports = {
   rpc,
   setRpcHandler,
   simulateTx,
-  syncIgnoreSwapFromSheet,
+
   tokenCache: _tokenCache,
 };
