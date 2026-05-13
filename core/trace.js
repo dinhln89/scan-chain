@@ -25,7 +25,7 @@ function setRpcHandler(fn) {
 }
 
 // Serialize tất cả RPC calls qua 1 queue với delay tối thiểu giữa mỗi call
-const RPC_INTERVAL_MS = parseInt(process.env.RPC_INTERVAL_MS || "150", 10);
+const RPC_INTERVAL_MS = parseInt(process.env.RPC_INTERVAL_MS || "50", 10);
 let _rpcChain = Promise.resolve();
 
 function enqueueRpc(fn) {
@@ -301,6 +301,17 @@ async function getErc20Symbol(tokenAddress) {
 
 // txData co the truyen tu DB de bo qua eth_getTransactionByHash
 async function analyzeTx(txHash, txData = null) {
+  // Pre-filter using txData before any RPC — avoids receipt call for ignored txs
+  if (txData) {
+    const sel = txData.input?.slice(0, 10)?.toLowerCase();
+    if (IgnoreMethod.getAll().has(sel)) throw new Error("IGNORED_METHOD");
+    if (hasSignatureInInput(txData.input)) throw new Error("IGNORED_SIGN");
+    if (hasV3PathInInput(txData.input)) throw new Error("IGNORED_V3_PATH");
+    const preAddrs = IgnoreAddress.getAll();
+    if (preAddrs.has(txData.from?.toLowerCase())) throw new Error("IGNORED_ADDRESS");
+    if (txData.to && preAddrs.has(txData.to.toLowerCase())) throw new Error("IGNORED_ADDRESS");
+  }
+
   const [receipt, fetchedTx] = await Promise.all([
     rpc("eth_getTransactionReceipt", [txHash]),
     txData ? Promise.resolve(null) : rpc("eth_getTransactionByHash", [txHash]),
