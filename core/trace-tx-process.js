@@ -240,11 +240,8 @@ async function processTxData(tx) {
     ),
   ];
 
-  // Chạy song song: lấy symbol, simulate, resolve pair — độc lập nhau
-  const [symbol, simulateResult, swapPairWallets] = await Promise.all([
-    firstToSender
-      ? getErc20Symbol(firstToSender.token).then((s) => s || "")
-      : Promise.resolve(""),
+  // Chạy song song: simulate và resolve pair — độc lập nhau
+  const [simulateResult, swapPairWallets] = await Promise.all([
     isTransferFromErc20
       ? simulateTx(
           tx.to,
@@ -345,11 +342,16 @@ async function processTxData(tx) {
 
   // Bước 3: tokenAddrsOnPairs = swapPairBalanceOfs sau khi lọc
   const tokenAddrsOnPairs = [...swapPairBalanceOfs];
-  const pairTokenSymbols = await Promise.all(
-    tokenAddrsOnPairs.map((addr) =>
-      getErc20Symbol(addr).then((s) => s || addr),
-    ),
-  );
+
+  // Batch tất cả symbol lookups: firstToSender + tokenAddrsOnPairs = 1 batchRpc thay vì N calls
+  const symbolAddrs = [
+    ...(firstToSender ? [firstToSender.token] : []),
+    ...tokenAddrsOnPairs,
+  ];
+  const allSymbols = await getErc20SymbolBatch(symbolAddrs);
+  const symbolOffset = firstToSender ? 1 : 0;
+  const symbol = firstToSender ? (allSymbols[0] || "") : "";
+  const pairTokenSymbols = tokenAddrsOnPairs.map((addr, i) => allSymbols[symbolOffset + i] || addr);
 
   return {
     calls,
