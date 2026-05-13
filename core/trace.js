@@ -435,13 +435,14 @@ async function analyzeTx(txHash, txData = null) {
 
   // Mảng A: input addresses + sender
   const addersExcludeFromSet = new Set([...addersExcludeFrom, sender]);
-  // Mảng B: transferFrom calls có from trong mảng A
+  // Mảng B: transferFrom calls có from trong mảng A và amount > 0
   const isTransferFromErc20 = calls.some((c) => {
     const input = c.input?.toLowerCase();
-    if (!input || input.length < 74) return false;
+    if (!input || input.length < 202) return false;
     if (!input.startsWith("0x23b872dd")) return false;
     const fromAddr = "0x" + input.slice(34, 74);
-    return addersExcludeFromSet.has(fromAddr);
+    if (!addersExcludeFromSet.has(fromAddr)) return false;
+    return BigInt("0x" + input.slice(138, 202)) > 0n;
   });
 
   return {
