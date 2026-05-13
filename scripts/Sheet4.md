@@ -1,0 +1,4 @@
+- Lấy các địa chỉ trong input của tx lưu vào 1 array join voi sender lưu vào mảng A
+- Check các call transferFrom của BEP20 nếu có from trong mảng A thì lưu vào mảng B
+- Check mảng B có length > 0 thì chạy simulateTx đó với SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
+- Kết quả ko có error hay revert từ simulateTx thì insert vào Sheet4

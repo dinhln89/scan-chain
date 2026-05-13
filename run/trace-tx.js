@@ -13,7 +13,7 @@ async function processTx(tx) {
 
   const now = new Date();
 
-  // Sheet4: contract có thể mint/transfer ERC20 và không revert khi simulate
+  // Sheet4: B.length > 0 (isTransferFromErc20) và simulate không revert
   if (result.isTransferFromErc20 && result.simulateResult?.notRevert) {
     await append(
       [

@@ -353,6 +353,7 @@ async function processTxData(tx) {
 
   return {
     calls,
+    transfers,
     isTransferSender,
     isTransferFromErc20,
     selector,

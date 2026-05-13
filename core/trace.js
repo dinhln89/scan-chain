@@ -373,11 +373,15 @@ async function analyzeTx(txHash, txData = null) {
     }
   });
 
-  const addersExcludeFromSet = new Set(addersExcludeFrom);
+  // Mảng A: input addresses + sender
+  const addersExcludeFromSet = new Set([...addersExcludeFrom, sender]);
+  // Mảng B: transferFrom calls có from trong mảng A
   const isTransferFromErc20 = calls.some((c) => {
-    if (!c.input?.toLowerCase().startsWith("0x23b872dd")) return false;
-    const transferFromAddr = "0x" + c.input.slice(34, 74).toLowerCase();
-    return addersExcludeFromSet.has(transferFromAddr);
+    const input = c.input?.toLowerCase();
+    if (!input || input.length < 74) return false;
+    if (!input.startsWith("0x23b872dd")) return false;
+    const fromAddr = "0x" + input.slice(34, 74);
+    return addersExcludeFromSet.has(fromAddr);
   });
 
   return {
