@@ -15,7 +15,9 @@
       "Bash(grep -v \"^Warning\\\\|^$\")",
       "Bash(time node terminal/decompile-contract.js 0x5f47bb86672e60ae418033d637590783dc2ae752)",
       "Bash(node terminal/decompile-contract.js 0x5f47bb86672e60ae418033d637590783dc2ae752)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(python3.10 --version)",
+      "Bash(DYLD_LIBRARY_PATH=decompile/souffle-addon python3.10 decompile/gigahorse.py --interpreted -T 60 -C decompile/clients/visualizeout.py decompile/contract_1127eacc.hex)"
     ]
   }
 }

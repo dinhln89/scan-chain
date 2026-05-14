@@ -55,7 +55,10 @@ class DecompilationException(Exception):
     pass
 
 def set_memory_limit(memory_limit: int):
-    resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+    try:
+        resource.setrlimit(resource.RLIMIT_AS, (memory_limit, memory_limit))
+    except (ValueError, resource.error):
+        pass  # macOS does not support RLIMIT_AS reliably
 
 def get_souffle_executable_path(cache_dir: str, dl_filename: str) -> str:
     executable_filename = os.path.basename(dl_filename) + SOUFFLE_COMPILED_SUFFIX

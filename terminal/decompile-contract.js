@@ -12,8 +12,10 @@ const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const TEMP_DIR = path.resolve(__dirname, "../.temp");
 const GIGAHORSE_CACHE_DIR = path.resolve(__dirname, "../data/gigahorse-cache");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const GIGAHORSE_BIN = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse");
-const GIGAHORSE_IMAGE = process.env.GIGAHORSE_IMAGE || "gigahorse-toolchain";
+const GIGAHORSE_BIN = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse"); // Docker wrapper
+const GIGAHORSE_LOCAL = path.join(DECOMPILE_DIR, "gigahorse.py");
+const GIGAHORSE_ADDON = path.join(DECOMPILE_DIR, "souffle-addon");
+const PYTHON = process.env.PYTHON || "python3.10";
 const TIMEOUT = process.env.DECOMPILE_TIMEOUT || 600;
 const BSC_CHAIN_ID = 56;
 const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
@@ -686,9 +688,31 @@ async function decompileContract(address) {
     fs.writeFileSync(hexFile, hex);
 
     console.log(`Decompiling (timeout: ${TIMEOUT}s)...`);
+    // Xóa stale working dir để gigahorse không skip contract
+    fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
     try {
       let cmd, opts;
-      if (fs.existsSync(GIGAHORSE_BIN)) {
+      const localLibs = fs.existsSync(path.join(GIGAHORSE_ADDON, "libfunctors.so"));
+      if (localLibs) {
+        // Ưu tiên local build (nhanh hơn Docker ~2x)
+        cmd = [
+          PYTHON,
+          GIGAHORSE_LOCAL,
+          "--interpreted",
+          `-j 1`,
+          `-T ${TIMEOUT}`,
+          `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
+          hexFile,
+        ].join(" ");
+        opts = {
+          stdio: "inherit",
+          cwd: PROJECT_ROOT,
+          env: { ...process.env, DYLD_LIBRARY_PATH: GIGAHORSE_ADDON },
+        };
+      } else {
+        // Fallback: Docker
+        fs.mkdirSync(TEMP_DIR, { recursive: true });
+        const relHex = path.relative(PROJECT_ROOT, hexFile);
         cmd = [
           GIGAHORSE_BIN,
           "--interpreted",
@@ -697,24 +721,6 @@ async function decompileContract(address) {
           hexFile,
         ].join(" ");
         opts = { stdio: "inherit", cwd: PROJECT_ROOT };
-      } else {
-        // Pre-create .temp so the container user can write into it
-        fs.mkdirSync(TEMP_DIR, { recursive: true });
-        const relHex = path.relative(PROJECT_ROOT, hexFile);
-        cmd = [
-          "docker run --rm",
-          `--workdir /tmp`,
-          `-u ${process.getuid()}:${process.getgid()}`,
-          `-v ${PROJECT_ROOT}:/workspace`,
-          GIGAHORSE_IMAGE,
-          "--interpreted",
-          `-T ${TIMEOUT}`,
-          `-C /workspace/decompile/clients/visualizeout.py`,
-          `-w /workspace/.temp`,
-          `-r /tmp/results.json`,
-          `/workspace/${relHex}`,
-        ].join(" ");
-        opts = { stdio: "inherit" };
       }
       execSync(cmd, opts);
     } catch {

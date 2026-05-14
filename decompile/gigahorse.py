@@ -575,6 +575,8 @@ def run_gigahorse(args, fact_generator: AbstractFactGenerator) -> None:
     write_results(res_list, args.results_file)
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.set_start_method('fork')
     # Decompiler tuning
     parser.add_argument("-cd",
                         "--context_depth",
