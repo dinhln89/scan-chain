@@ -13,8 +13,25 @@ const TEMP_DIR = path.resolve(__dirname, "../.temp");
 const GIGAHORSE = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse");
 const TIMEOUT = process.env.DECOMPILE_TIMEOUT || 600;
 const BSC_CHAIN_ID = 56;
+const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
 
 const SHOW_SOURCE = process.argv.includes("--source");
+
+// --- 4byte cache ---
+let _4byteCache = null;
+function load4byteCache() {
+  if (_4byteCache) return _4byteCache;
+  try {
+    _4byteCache = JSON.parse(fs.readFileSync(FOURBYTE_CACHE_FILE, "utf8"));
+  } catch {
+    _4byteCache = {};
+  }
+  return _4byteCache;
+}
+function save4byteCache() {
+  fs.mkdirSync(path.dirname(FOURBYTE_CACHE_FILE), { recursive: true });
+  fs.writeFileSync(FOURBYTE_CACHE_FILE, JSON.stringify(_4byteCache, null, 2));
+}
 
 function httpsGet(url) {
   return new Promise((resolve, reject) => {
@@ -28,18 +45,25 @@ function httpsGet(url) {
 
 // Tra cứu tên function từ 4byte.directory (free, no API key)
 async function lookup4byte(selector) {
+  const cache = load4byteCache();
+  if (selector in cache) return cache[selector]; // null cũng được cache
+
   const url = `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`;
+  let result = null;
   try {
     const { status, body } = await httpsGet(url);
-    if (status !== 200) return null;
-    const { results } = JSON.parse(body);
-    if (!results || results.length === 0) return null;
-    // Ưu tiên result có id nhỏ nhất (được đăng ký sớm nhất = phổ biến nhất)
-    results.sort((a, b) => a.id - b.id);
-    return results[0].text_signature;
-  } catch {
-    return null;
-  }
+    if (status === 200) {
+      const { results } = JSON.parse(body);
+      if (results && results.length > 0) {
+        results.sort((a, b) => a.id - b.id);
+        result = results[0].text_signature;
+      }
+    }
+  } catch {}
+
+  cache[selector] = result;
+  save4byteCache();
+  return result;
 }
 
 async function fetchSourcify(address) {
@@ -309,11 +333,50 @@ async function buildPseudoSolidity(outDir, address) {
   mutatingList.sort((a, b) => a.localeCompare(b));
   viewList.sort((a, b) => a.localeCompare(b));
 
-  lines.push(`// State-changing (${mutatingList.length}):`);
-  mutatingList.forEach((sig) => lines.push(`// function ${sig}`));
+  // Helper: slot → label
+  const slotLabel = (s) => s ? `storage[${s}]` : "unknown";
+
+  // Group by ownerSlot
+  const ownerGroups = new Map(); // slot -> [sig]
+  const nonOwnerMutating = [];
+  const nonOwnerView = [];
+
+  for (const [block] of pubFns) {
+    if ((blockToName.get(block) || "") === "__function_selector__") continue;
+    const name = resolvedNames.get(block);
+    if (!name) continue;
+    const analysis = fnAnalysis.get(block) || {};
+    const payable = analysis.payable ? " payable" : "";
+    const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
+    const sig = `external${payable} ${name}${ret}`;
+
+    if (analysis.ownerSlot) {
+      if (!ownerGroups.has(analysis.ownerSlot)) ownerGroups.set(analysis.ownerSlot, []);
+      ownerGroups.get(analysis.ownerSlot).push(sig);
+    } else if (analysis.mutating) {
+      nonOwnerMutating.push(sig);
+    } else {
+      nonOwnerView.push(sig);
+    }
+  }
+
+  // Sort tất cả
+  for (const list of [...ownerGroups.values(), nonOwnerMutating, nonOwnerView]) {
+    list.sort((a, b) => a.localeCompare(b));
+  }
+
+  // In access-controlled groups
+  for (const [slot, list] of [...ownerGroups.entries()].sort()) {
+    lines.push(`// Access-controlled [require(msg.sender == ${slotLabel(slot)})] (${list.length}):`);
+    list.forEach((sig) => lines.push(`// function ${sig}`));
+    lines.push("");
+  }
+
+  lines.push(`// State-changing / no access check (${nonOwnerMutating.length}):`);
+  nonOwnerMutating.forEach((sig) => lines.push(`// function ${sig}`));
   lines.push("");
-  lines.push(`// View / no storage write (${viewList.length}):`);
-  viewList.forEach((sig) => lines.push(`// function ${sig}`));
+  lines.push(`// View / no storage write (${nonOwnerView.length}):`);
+  nonOwnerView.forEach((sig) => lines.push(`// function ${sig}`));
   lines.push("");
 
   // TAC functions
