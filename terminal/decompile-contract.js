@@ -221,6 +221,37 @@ function analyzeFunctions(tacFile, addressVars, boolVars) {
 
     const mutating = block.includes(" SSTORE ");
 
+    // Detect initializer: SLOAD slot → check == 0 → SSTORE same slot = 1
+    let isInitializer = false;
+    {
+      // Map: slotConst -> loaded var
+      const slotLoaded = new Map();
+      for (const m of block.matchAll(/:\s+(\S+) = SLOAD \S+\((0x[0-9a-f]+)\)/g))
+        slotLoaded.set(m[2], m[1]);
+
+      // Vars kiểm tra == 0 (ISZERO hoặc EQ với 0)
+      const checkedZero = new Set();
+      for (const m of block.matchAll(/:\s+(\S+) = ISZERO (\S+)/g))
+        checkedZero.add(m[2]);
+      for (const m of block.matchAll(/:\s+(\S+) = EQ (\S+), \S+\(0x0\)/g))
+        checkedZero.add(m[2]);
+      for (const m of block.matchAll(/:\s+(\S+) = EQ \S+\(0x0\), (\S+)/g))
+        checkedZero.add(m[2]);
+
+      // Slots được SSTORE với giá trị nhỏ (0x1 hoặc 0x2 — initialized flag)
+      const storedOne = new Set();
+      for (const m of block.matchAll(/SSTORE \S+\((0x[0-9a-f]+)\), \S+\(0x[12]\)/g))
+        storedOne.add(m[1]);
+
+      // Nếu slot vừa được check==0 vừa được set=1 → initializer
+      for (const [slot, loadedVar] of slotLoaded) {
+        if (checkedZero.has(loadedVar) && storedOne.has(slot)) {
+          isInitializer = true;
+          break;
+        }
+      }
+    }
+
     // Detect owner-check: CALLER → EQ pattern
     const callerVars = new Set([...block.matchAll(/: (\S+) = CALLER/g)].map((m) => m[1]));
     let ownerSlot = null;
@@ -260,7 +291,7 @@ function analyzeFunctions(tacFile, addressVars, boolVars) {
       }
     }
 
-    result.set(blockAddr, { payable: isPayable, retType, mutating, ownerSlot });
+    result.set(blockAddr, { payable: isPayable, retType, mutating, ownerSlot, isInitializer });
   }
   return result;
 }
@@ -376,8 +407,11 @@ async function buildPseudoSolidity(outDir, address) {
   // Helper: slot → label
   const slotLabel = (s) => s ? `storage[${s}]` : "unknown";
 
-  // Group by ownerSlot
+  const INIT_NAME_RE = /^(?:init|initialize|initialise|setup|setUp)[\W_]?/i;
+
+  // Group by ownerSlot, initializer, mutating, view
   const ownerGroups = new Map(); // slot -> [sig]
+  const initList = [];
   const nonOwnerMutating = [];
   const nonOwnerView = [];
 
@@ -390,7 +424,13 @@ async function buildPseudoSolidity(outDir, address) {
     const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
     const sig = `external${payable} ${name}${ret}`;
 
-    if (analysis.ownerSlot) {
+    // Detect initializer: by pattern hoặc by tên
+    const fnBaseName = name.split("(")[0];
+    const isInit = analysis.isInitializer || INIT_NAME_RE.test(fnBaseName);
+
+    if (isInit) {
+      initList.push(sig);
+    } else if (analysis.ownerSlot) {
       if (!ownerGroups.has(analysis.ownerSlot)) ownerGroups.set(analysis.ownerSlot, []);
       ownerGroups.get(analysis.ownerSlot).push(sig);
     } else if (analysis.mutating) {
