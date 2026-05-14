@@ -10,6 +10,7 @@ const { rpc } = require("../core/trace");
 
 const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const TEMP_DIR = path.resolve(__dirname, "../.temp");
+const GIGAHORSE_CACHE_DIR = path.resolve(__dirname, "../data/gigahorse-cache");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 const GIGAHORSE_BIN = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse");
 const GIGAHORSE_IMAGE = process.env.GIGAHORSE_IMAGE || "gigahorse-toolchain";
@@ -375,19 +376,17 @@ async function buildPseudoSolidity(outDir, address) {
     }
   }
 
-  // Batch lookup 4byte cho unresolved, fallback sang infer từ TAC
-  for (const item of unresolvedSelectors) {
+  // Parallel lookup 4byte cho tất cả unresolved cùng lúc
+  await Promise.all(unresolvedSelectors.map(async (item) => {
     const found = await lookup4byte(item.selector);
     if (found) {
       resolvedNames.set(item.block, found);
     } else {
-      // Infer params từ TAC
       const argVars = blockToArgs.get(item.block) || [];
       const params = argVars.map((v) => inferType(v, addressVars, boolVars));
-      const sig = `${item.selector}(${params.join(", ")})`;
-      resolvedNames.set(item.block, sig);
+      resolvedNames.set(item.block, `${item.selector}(${params.join(", ")})`);
     }
-  }
+  }));
 
   // Collect, phân nhóm mutating vs view, sort asc
   const mutatingList = [];
@@ -529,20 +528,17 @@ async function decompileContract(address) {
   console.log(`Contract: ${address}`);
   console.log("=".repeat(60));
 
-  // --- Proxy detection ---
-  process.stdout.write("Proxy check... ");
-  const proxy = await detectProxy(address);
+  // --- Proxy + Sourcify song song ---
+  const [proxy, solFiles] = await Promise.all([
+    detectProxy(address),
+    SKIP_SOURCIFY ? Promise.resolve(null) : fetchSourcify(address),
+  ]);
+
   if (proxy) {
-    console.log(`${proxy.type} -> ${proxy.impl}`);
-    console.log(`Decompiling implementation instead...\n`);
+    console.log(`Proxy: ${proxy.type} -> ${proxy.impl}`);
     return decompileContract(proxy.impl);
   }
-  console.log("không phải proxy.");
-
-  // --- Sourcify ---
-  process.stdout.write("Tìm verified source (Sourcify)... ");
-  const solFiles = SKIP_SOURCIFY ? null : await fetchSourcify(address);
-  if (!SKIP_SOURCIFY && solFiles && solFiles.length > 0) {
+  if (solFiles && solFiles.length > 0) {
     console.log(`Có! (${solFiles.length} files)`);
     // Lấy toàn bộ function signature đến trước { hoặc ;
     const fnRe = /^\s+function\s+(.+?)(?:\s*\{|;)\s*$/gm;
@@ -590,10 +586,22 @@ async function decompileContract(address) {
     if (!SHOW_SOURCE) console.log("\nThêm --source để xem nội dung đầy đủ");
     return;
   }
-  console.log(SKIP_SOURCIFY ? "Bỏ qua (--no-sourcify)." : "Không có.");
+  if (SKIP_SOURCIFY) console.log("Sourcify: bỏ qua (--no-sourcify).");
+  else console.log("Sourcify: không có.");
 
-  // --- Gigahorse ---
-  if (!fs.existsSync(tacFile)) {
+  // --- Gigahorse (với persistent cache) ---
+  const cacheOutDir = path.join(GIGAHORSE_CACHE_DIR, name, "out");
+  const cachedTac = path.join(cacheOutDir, "contract.tac");
+
+  // Dùng cache nếu đã có
+  if (fs.existsSync(cachedTac)) {
+    console.log("Dùng gigahorse cache.");
+    // Symlink/copy cache vào outDir để buildPseudoSolidity đọc
+    fs.mkdirSync(path.dirname(outDir), { recursive: true });
+    if (!fs.existsSync(outDir)) {
+      fs.cpSync(cacheOutDir, outDir, { recursive: true });
+    }
+  } else if (!fs.existsSync(tacFile)) {
     process.stdout.write("Fetching bytecode... ");
     const code = await rpc("eth_getCode", [address, "latest"]);
     if (!code || code === "0x") {
@@ -645,8 +653,10 @@ async function decompileContract(address) {
       console.error("Không có output (timeout hoặc lỗi)");
       return;
     }
-  } else {
-    console.log("Dùng cache gigahorse.");
+
+    // Lưu vào persistent cache
+    fs.mkdirSync(path.dirname(cacheOutDir), { recursive: true });
+    fs.cpSync(outDir, cacheOutDir, { recursive: true });
   }
 
   // Build và lưu pseudo-Solidity
