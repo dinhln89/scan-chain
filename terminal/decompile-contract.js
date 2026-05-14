@@ -225,23 +225,31 @@ function analyzeFunctions(tacFile, addressVars, boolVars) {
     const callerVars = new Set([...block.matchAll(/: (\S+) = CALLER/g)].map((m) => m[1]));
     let ownerSlot = null;
     if (callerVars.size > 0) {
-      // Build local sloadSlot + andFrom từ block
-      const localSload = new Map();
+      // Build local maps từ block
+      const localSload = new Map();  // var -> constant slot (nếu có)
+      const localSloadVars = new Set(); // tất cả kết quả SLOAD (kể cả dynamic slot)
       const localAndFrom = new Map();
       for (const line of block.split("\n")) {
+        // SLOAD với constant slot: SLOAD vX(0x1)
         let m = line.match(/:\s+(\S+) = SLOAD \S+\((0x[0-9a-f]+)\)/);
-        if (m) localSload.set(m[1], m[2]);
+        if (m) { localSload.set(m[1], m[2]); localSloadVars.add(m[1]); }
+        // SLOAD với dynamic slot: SLOAD vX
+        else { m = line.match(/:\s+(\S+) = SLOAD (\S+)$/); if (m) localSloadVars.add(m[1]); }
+        // AND operations
         m = line.match(/:\s+(\S+) = AND (\S+)\([^)]+\), (\S+)$/) ||
             line.match(/:\s+(\S+) = AND (\S+), (\S+)\([^)]+\)$/);
         if (m) localAndFrom.set(m[1], m[3] || m[2]);
       }
       const traceSlot = (v, d = 0) => {
         if (d > 8) return null;
-        if (localSload.has(v)) return localSload.get(v);
+        if (localSload.has(v)) return localSload.get(v);    // slot constant
+        if (localSloadVars.has(v)) return "?";              // SLOAD dynamic slot
         if (localAndFrom.has(v)) return traceSlot(localAndFrom.get(v), d + 1);
         return null;
       };
-      for (const m of block.matchAll(/: (\S+) = EQ (\S+), (\S+)/g)) {
+      // Detect cả EQ và SUB(CALLER, owner) pattern
+      const ownerCheckRe = /: (\S+) = (?:EQ|SUB) (\S+), (\S+)/g;
+      for (const m of block.matchAll(ownerCheckRe)) {
         const [, , op1, op2] = m;
         for (const op of [op1, op2]) {
           if (callerVars.has(op)) continue;
