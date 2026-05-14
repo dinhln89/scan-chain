@@ -15,5 +15,6 @@
   "0x715018a6": "renounceOwnership()",
   "0x379607f5": "claim(uint256)",
   "0x264e9cbf": "setVestingTerm(uint256)",
-  "0x2186ff4e": "received(uint256,address,uint256)"
+  "0x2186ff4e": "received(uint256,address,uint256)",
+  "0x8c379a0": "Error(string)"
 }

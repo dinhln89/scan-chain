@@ -3,3 +3,4 @@ node_modules/
 pm2.json
 logs/
 .temp/
+data/gigahorse-cache/

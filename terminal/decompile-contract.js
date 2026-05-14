@@ -47,6 +47,24 @@ function httpsGet(url) {
   });
 }
 
+// Lazy-load DB models
+let _db = null;
+async function getDb() {
+  if (_db) return _db;
+  try {
+    const sequelize = require("../db");
+    await sequelize.ensureDatabase();
+    _db = {
+      FourByteSelector: require("../models/FourByteSelector"),
+      ContractDecompile: require("../models/ContractDecompile"),
+    };
+    await Promise.all([_db.FourByteSelector.sync(), _db.ContractDecompile.sync()]);
+  } catch {
+    _db = null;
+  }
+  return _db;
+}
+
 // Lazy-load FourByteSelector model (DB có thể không kết nối được)
 let _FourByteSelector = null;
 async function getFourByteSelectorModel() {
@@ -516,6 +534,29 @@ async function detectProxy(address) {
   return null;
 }
 
+function printCached(row) {
+  if (row.proxyOf && row.source === "proxy") {
+    console.log(`Proxy → ${row.proxyOf}`);
+    return;
+  }
+  if (row.externalCalls?.length) {
+    console.log("\n// External calls detected:");
+    row.externalCalls.forEach((s) => console.log(`//   interface { function ${s}; }`));
+  }
+  if (row.events?.length) {
+    row.events.forEach((e) => console.log(`event ${e};`));
+  }
+  const groups = new Map();
+  for (const { group, sig } of row.functions || []) {
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(sig);
+  }
+  for (const [group, sigs] of groups) {
+    console.log(`\n// ${group} (${sigs.length}):`);
+    sigs.forEach((s) => console.log(`// function ${s}`));
+  }
+}
+
 async function decompileContract(address) {
   address = address.toLowerCase();
   const name = `contract_${address.slice(2, 10)}`;
@@ -528,6 +569,17 @@ async function decompileContract(address) {
   console.log(`Contract: ${address}`);
   console.log("=".repeat(60));
 
+  // --- Check DB cache trước ---
+  const db = await getDb();
+  if (db) {
+    const cached = await db.ContractDecompile.findByPk(address);
+    if (cached) {
+      console.log("Dùng DB cache.");
+      printCached(cached);
+      return;
+    }
+  }
+
   // --- Proxy + Sourcify song song ---
   const [proxy, solFiles] = await Promise.all([
     detectProxy(address),
@@ -536,6 +588,15 @@ async function decompileContract(address) {
 
   if (proxy) {
     console.log(`Proxy: ${proxy.type} -> ${proxy.impl}`);
+    // Lưu proxy mapping vào DB
+    if (db) {
+      await db.ContractDecompile.upsert({
+        address,
+        proxyOf: proxy.impl.toLowerCase(),
+        source: "proxy",
+        functions: [],
+      }).catch(() => {});
+    }
     return decompileContract(proxy.impl);
   }
   if (solFiles && solFiles.length > 0) {
@@ -674,6 +735,30 @@ async function decompileContract(address) {
   // Build và lưu pseudo-Solidity
   const pseudo = await buildPseudoSolidity(outDir, address);
   fs.writeFileSync(solFile, pseudo);
+
+  // Lưu vào DB cache
+  if (db) {
+    const callSigs = readCsv(path.join(outDir, "CallToSignature.csv"))
+      .map((r) => r[1]).filter(Boolean);
+    const events = readCsv(path.join(outDir, "EventSignatureInContract.csv"))
+      .map((r) => r[1]).filter(Boolean);
+    // Extract function groups từ pseudo output
+    const fns = [];
+    let group = null;
+    for (const line of pseudo.split("\n")) {
+      const gm = line.match(/^\/\/ (One-time init|Access-controlled[^(]*|State-changing[^(]*|View[^(]*)\(/);
+      if (gm) { group = gm[1].trim(); continue; }
+      const fm = line.match(/^\/\/ function (.+)/);
+      if (fm && group) fns.push({ group, sig: fm[1] });
+    }
+    await db.ContractDecompile.upsert({
+      address,
+      source: "gigahorse",
+      externalCalls: [...new Set(callSigs)].sort(),
+      events: [...new Set(events)].sort(),
+      functions: fns,
+    }).catch(() => {});
+  }
 
   console.log(`\nSaved: ${solFile}`);
   console.log(pseudo);
