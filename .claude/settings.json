@@ -5,7 +5,9 @@
       "Bash(git status *)",
       "Bash(git check-ignore *)",
       "Bash(node terminal/decompile-contract.js 0x1127eacc565df578e586930da2f05cce845b787f)",
-      "Bash(node terminal/decompile-contract.js 0x20042403d6e98a393b0d51a1e4a871637dc573b0)"
+      "Bash(node terminal/decompile-contract.js 0x20042403d6e98a393b0d51a1e4a871637dc573b0)",
+      "Bash(git -C /Users/dinhle/projects/scan-chain/decompile status --short)",
+      "Bash(git -C /Users/dinhle/projects/scan-chain/decompile remote -v)"
     ]
   }
 }
