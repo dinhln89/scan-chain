@@ -633,9 +633,6 @@ async function decompileContract(address) {
 
   console.log(`\nSaved: ${solFile}`);
   console.log(pseudo);
-
-  // Xóa folder .temp/<name>/ sau khi đã lưu .sol (giữ lại file .sol)
-  fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
 }
 
 async function main() {
@@ -647,6 +644,7 @@ async function main() {
   for (const addr of args) {
     await decompileContract(addr);
   }
+  fs.rmSync(TEMP_DIR, { recursive: true, force: true });
   process.exit(0);
 }
 
