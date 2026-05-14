@@ -13,4 +13,4 @@ mysql -u root -p
 
 node terminal/decompile-contract.js 0xa92eae4ab17f9091fbf5da7c7cbb0aea346649c9
 
-Làm sao để decompile 0xa92eae4ab17f9091fbf5da7c7cbb0aea346649c9 giống scripts/out.sol
+Làm sao để decompile node terminal/decompile-contract.js --source 0xa92eae4ab17f9091fbf5da7c7cbb0aea346649c9 giống scripts/out.sol
