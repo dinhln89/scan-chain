@@ -26,6 +26,22 @@ function httpsGet(url) {
   });
 }
 
+// Tra cứu tên function từ 4byte.directory (free, no API key)
+async function lookup4byte(selector) {
+  const url = `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`;
+  try {
+    const { status, body } = await httpsGet(url);
+    if (status !== 200) return null;
+    const { results } = JSON.parse(body);
+    if (!results || results.length === 0) return null;
+    // Ưu tiên result có id nhỏ nhất (được đăng ký sớm nhất = phổ biến nhất)
+    results.sort((a, b) => a.id - b.id);
+    return results[0].text_signature;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchSourcify(address) {
   const url = `https://sourcify.dev/server/files/any/${BSC_CHAIN_ID}/0x${address.replace("0x", "")}`;
   try {
@@ -46,6 +62,44 @@ function readCsv(file) {
     .map((l) => l.split("\t"));
 }
 
+const ADDRESS_MASK = "ffffffffffffffffffffffffffffffffffffffff";
+
+// Phân tích TAC để build set các variable đã biết type từ AND operations
+function buildTypeMap(tacFile) {
+  const addressVars = new Set();
+  const boolVars = new Set();
+  if (!fs.existsSync(tacFile)) return { addressVars, boolVars };
+
+  const andRe = /^\S+: (\S+) = AND (.+)/;
+  const varRe = /v([0-9a-fA-FVS]+)/g;
+
+  for (const line of fs.readFileSync(tacFile, "utf8").split("\n")) {
+    const m = andRe.exec(line.trim());
+    if (!m) continue;
+    const operands = m[2];
+    const hasAddrMask = operands.includes(ADDRESS_MASK);
+    const hasBoolMask = /\(0x1\)/.test(operands);
+    if (!hasAddrMask && !hasBoolMask) continue;
+
+    let vm;
+    varRe.lastIndex = 0;
+    while ((vm = varRe.exec(operands)) !== null) {
+      const v = vm[1];
+      if (hasAddrMask) addressVars.add(v);
+      if (hasBoolMask) boolVars.add(v);
+    }
+  }
+  return { addressVars, boolVars };
+}
+
+function inferType(varName, addressVars, boolVars) {
+  // Normalise: strip leading 0x nếu có, lấy base trước V
+  const base = varName.split("V")[0].replace(/^0x/, "");
+  if (addressVars.has(base) || addressVars.has(varName)) return "address";
+  if (boolVars.has(base) || boolVars.has(varName)) return "bool";
+  return "uint256";
+}
+
 // Parse contract.tac thành map: functionEntry -> { signature, blocks: string }
 function parseTac(tacFile) {
   const content = fs.readFileSync(tacFile, "utf8");
@@ -61,7 +115,7 @@ function parseTac(tacFile) {
 }
 
 // Build pseudo-Solidity từ gigahorse output
-function buildPseudoSolidity(outDir, address) {
+async function buildPseudoSolidity(outDir, address) {
   const namesFile = path.join(outDir, "HighLevelFunctionName.csv");
   const callSigsFile = path.join(outDir, "CallToSignature.csv");
   const publicFnFile = path.join(outDir, "PublicFunction.csv");
@@ -93,22 +147,59 @@ function buildPseudoSolidity(outDir, address) {
   // Public functions summary
   const names = readCsv(namesFile);
   const pubFns = readCsv(publicFnFile);
+  const pubArgs = readCsv(path.join(outDir, "PublicFunctionArg.csv"));
   const blockToName = new Map(names.map(([block, name]) => [block, name]));
 
+  // Build arg map: block -> sorted list of varNames by index
+  const blockToArgs = new Map();
+  for (const [block, varName, idx] of pubArgs) {
+    if (!blockToArgs.has(block)) blockToArgs.set(block, []);
+    blockToArgs.get(block)[parseInt(idx)] = varName;
+  }
+
+  // Build type map from TAC
+  const { addressVars, boolVars } = buildTypeMap(tacFile);
+
   // pubFns: [block, selector] — tất cả public functions từ gigahorse
-  lines.push("// Public interface:");
+  // Lookup 4byte cho các selector chưa resolve
+  const resolvedNames = new Map();
+  const unresolvedSelectors = [];
   for (const [block, selector] of pubFns) {
     const name = blockToName.get(block) || selector;
     if (name === "__function_selector__") continue;
-    // Resolved: có chứa "(", không phải hex thuần
     const isResolved = name.includes("(") && !/^0x[0-9a-f]+$/.test(name);
     if (isResolved) {
-      lines.push(`// function ${name}`);
+      resolvedNames.set(block, name);
     } else {
-      // Unresolved: hiện selector để biết tồn tại
-      lines.push(`// function ??? // selector: ${selector}`);
+      unresolvedSelectors.push({ block, selector });
     }
   }
+
+  // Batch lookup 4byte cho unresolved, fallback sang infer từ TAC
+  for (const item of unresolvedSelectors) {
+    const found = await lookup4byte(item.selector);
+    if (found) {
+      resolvedNames.set(item.block, found);
+    } else {
+      // Infer params từ TAC
+      const argVars = blockToArgs.get(item.block) || [];
+      const params = argVars.map((v) => inferType(v, addressVars, boolVars));
+      const sig = `${item.selector}(${params.join(", ")})`;
+      resolvedNames.set(item.block, sig);
+    }
+  }
+
+  // Collect và sort theo tên asc
+  const pubList = [];
+  for (const [block] of pubFns) {
+    if ((blockToName.get(block) || "") === "__function_selector__") continue;
+    const name = resolvedNames.get(block);
+    if (name) pubList.push(name);
+  }
+  pubList.sort((a, b) => a.localeCompare(b));
+
+  lines.push("// Public interface:");
+  pubList.forEach((name) => lines.push(`// function ${name}`));
   lines.push("");
 
   // TAC functions
@@ -202,7 +293,7 @@ async function decompileContract(address) {
   }
 
   // Build và lưu pseudo-Solidity
-  const pseudo = buildPseudoSolidity(outDir, address);
+  const pseudo = await buildPseudoSolidity(outDir, address);
   fs.writeFileSync(solFile, pseudo);
 
   console.log(`\nSaved: ${solFile}`);
