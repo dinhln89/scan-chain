@@ -10,3 +10,7 @@ node terminal/check-trace-tx.js 0x9cdbd54bea71d56294f8b086bc76f4ae19c46f914cfc43
 sudo tail -f /opt/lampp/var/mysql/dinhln-local-slow.log
 
 mysql -u root -p
+
+node terminal/decompile-contract.js 0xa92eae4ab17f9091fbf5da7c7cbb0aea346649c9
+
+Làm sao để decompile 0xa92eae4ab17f9091fbf5da7c7cbb0aea346649c9 giống scripts/out.sol

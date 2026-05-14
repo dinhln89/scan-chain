@@ -93,17 +93,23 @@ function buildPseudoSolidity(outDir, address) {
   // Public functions summary
   const names = readCsv(namesFile);
   const pubFns = readCsv(publicFnFile);
-  const selectorToName = new Map(names.map(([block, name]) => [block, name]));
+  const blockToName = new Map(names.map(([block, name]) => [block, name]));
 
-  const resolved = names.filter(([, n]) => n && n.includes("(") && n !== "__function_selector__");
-  if (resolved.length > 0) {
-    lines.push("// Public interface:");
-    resolved.forEach(([block, name]) => {
-      if (/^0x[0-9a-f]+$/.test(name)) return; // unresolved hex
+  // pubFns: [block, selector] — tất cả public functions từ gigahorse
+  lines.push("// Public interface:");
+  for (const [block, selector] of pubFns) {
+    const name = blockToName.get(block) || selector;
+    if (name === "__function_selector__") continue;
+    // Resolved: có chứa "(", không phải hex thuần
+    const isResolved = name.includes("(") && !/^0x[0-9a-f]+$/.test(name);
+    if (isResolved) {
       lines.push(`// function ${name}`);
-    });
-    lines.push("");
+    } else {
+      // Unresolved: hiện selector để biết tồn tại
+      lines.push(`// function ??? // selector: ${selector}`);
+    }
   }
+  lines.push("");
 
   // TAC functions
   if (!SHOW_SOURCE) {
