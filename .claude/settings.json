@@ -8,7 +8,11 @@
       "Bash(node terminal/decompile-contract.js 0x20042403d6e98a393b0d51a1e4a871637dc573b0)",
       "Bash(git -C /Users/dinhle/projects/scan-chain/decompile status --short)",
       "Bash(git -C /Users/dinhle/projects/scan-chain/decompile remote -v)",
-      "Bash(node test/test-owner-check.js)"
+      "Bash(node test/test-owner-check.js)",
+      "Bash(node terminal/decompile-contract.js 0xca11bde05977b3631167028862be2a173976ca11)",
+      "Bash(node terminal/decompile-contract.js --no-sourcify 0xca11bde05977b3631167028862be2a173976ca11)",
+      "Bash(DECOMPILE_TIMEOUT=1200 node terminal/decompile-contract.js --no-sourcify 0xca11bde05977b3631167028862be2a173976ca11)",
+      "Bash(grep -v \"^Warning\\\\|^$\")"
     ]
   }
 }

@@ -16,6 +16,7 @@ const BSC_CHAIN_ID = 56;
 const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
 
 const SHOW_SOURCE = process.argv.includes("--source");
+const SKIP_SOURCIFY = process.argv.includes("--no-sourcify");
 
 // --- 4byte cache ---
 let _4byteCache = null;
@@ -520,7 +521,7 @@ async function decompileContract(address) {
   const hexFile = path.join(DECOMPILE_DIR, `${name}.hex`);
   const outDir = path.join(TEMP_DIR, name, "out");
   const tacFile = path.join(outDir, "contract.tac");
-  const solFile = path.join(TEMP_DIR, name, `${name}.sol`);
+  const solFile = path.join(TEMP_DIR, `${name}.sol`);
 
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Contract: ${address}`);
@@ -538,23 +539,56 @@ async function decompileContract(address) {
 
   // --- Sourcify ---
   process.stdout.write("Tìm verified source (Sourcify)... ");
-  const solFiles = await fetchSourcify(address);
-  if (solFiles && solFiles.length > 0) {
+  const solFiles = SKIP_SOURCIFY ? null : await fetchSourcify(address);
+  if (!SKIP_SOURCIFY && solFiles && solFiles.length > 0) {
     console.log(`Có! (${solFiles.length} files)`);
+    // Lấy toàn bộ function signature đến trước { hoặc ;
+    const fnRe = /^\s+function\s+(.+?)(?:\s*\{|;)\s*$/gm;
+    const mutatingKw = /\b(?:pure|view)\b/;
+    const initRe = /^(?:init|initialize|initialise|setup|setUp)/i;
+
+    const mutList = [], viewList = [], initFnList = [];
+
     for (const f of solFiles) {
       const dest = path.join(TEMP_DIR, name, f.name);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, f.content);
-      console.log(`  Saved: ${dest}`);
+
+      // Parse function signatures
+      let m;
+      fnRe.lastIndex = 0;
+      while ((m = fnRe.exec(f.content)) !== null) {
+        const sig = m[1].trim().replace(/\s+/g, " ");
+        const fnName = sig.match(/^(\w+)/)?.[1] || "";
+        if (initRe.test(fnName)) initFnList.push(sig);
+        else if (mutatingKw.test(sig)) viewList.push(sig);
+        else mutList.push(sig);
+      }
+
       if (SHOW_SOURCE) {
         console.log(`\n// ${f.name}\n${"─".repeat(60)}`);
         console.log(f.content);
       }
     }
-    if (!SHOW_SOURCE) console.log("  Thêm --source để xem nội dung");
+
+    [initFnList, mutList, viewList].forEach((l) => l.sort((a, b) => a.localeCompare(b)));
+
+    if (initFnList.length) {
+      console.log(`\n// One-time init (${initFnList.length}):`);
+      initFnList.forEach((s) => console.log(`// function ${s}`));
+    }
+    if (mutList.length) {
+      console.log(`\n// State-changing (${mutList.length}):`);
+      mutList.forEach((s) => console.log(`// function ${s}`));
+    }
+    if (viewList.length) {
+      console.log(`\n// View (${viewList.length}):`);
+      viewList.forEach((s) => console.log(`// function ${s}`));
+    }
+    if (!SHOW_SOURCE) console.log("\nThêm --source để xem nội dung đầy đủ");
     return;
   }
-  console.log("Không có.");
+  console.log(SKIP_SOURCIFY ? "Bỏ qua (--no-sourcify)." : "Không có.");
 
   // --- Gigahorse ---
   if (!fs.existsSync(tacFile)) {
@@ -599,12 +633,15 @@ async function decompileContract(address) {
 
   console.log(`\nSaved: ${solFile}`);
   console.log(pseudo);
+
+  // Xóa folder .temp/<name>/ sau khi đã lưu .sol (giữ lại file .sol)
+  fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
 }
 
 async function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   if (args.length === 0) {
-    console.error("Usage: node terminal/decompile-contract.js [--source] <address> [address2] ...");
+    console.error("Usage: node terminal/decompile-contract.js [--source] [--no-sourcify] <address> [address2] ...");
     process.exit(1);
   }
   for (const addr of args) {
