@@ -14,7 +14,8 @@
       "Bash(DECOMPILE_TIMEOUT=1200 node terminal/decompile-contract.js --no-sourcify 0xca11bde05977b3631167028862be2a173976ca11)",
       "Bash(grep -v \"^Warning\\\\|^$\")",
       "Bash(time node terminal/decompile-contract.js 0x5f47bb86672e60ae418033d637590783dc2ae752)",
-      "Bash(node terminal/decompile-contract.js 0x5f47bb86672e60ae418033d637590783dc2ae752)"
+      "Bash(node terminal/decompile-contract.js 0x5f47bb86672e60ae418033d637590783dc2ae752)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

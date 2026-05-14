@@ -572,7 +572,12 @@ async function decompileContract(address) {
   // --- Check DB cache trước ---
   const db = await getDb();
   if (db) {
-    const cached = await db.ContractDecompile.findByPk(address);
+    let cached = await db.ContractDecompile.findByPk(address);
+    // Nếu là proxy, redirect sang implementation
+    if (cached?.proxyOf && cached.source === "proxy") {
+      console.log(`Proxy (DB): ${cached.proxyOf}`);
+      cached = await db.ContractDecompile.findByPk(cached.proxyOf);
+    }
     if (cached) {
       console.log("Dùng DB cache.");
       printCached(cached);
@@ -746,7 +751,7 @@ async function decompileContract(address) {
     const fns = [];
     let group = null;
     for (const line of pseudo.split("\n")) {
-      const gm = line.match(/^\/\/ (One-time init|Access-controlled[^(]*|State-changing[^(]*|View[^(]*)\(/);
+      const gm = line.match(/^\/\/ (.+?) \(\d+\):/);
       if (gm) { group = gm[1].trim(); continue; }
       const fm = line.match(/^\/\/ function (.+)/);
       if (fm && group) fns.push({ group, sig: fm[1] });
