@@ -432,6 +432,33 @@ async function buildPseudoSolidity(outDir, address) {
   return lines.join("\n");
 }
 
+// Detect proxy và trả về implementation address nếu có
+async function detectProxy(address) {
+  const EIP1967_IMPL   = "0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc";
+  const EIP1967_BEACON = "0xa3f0ad74e5423aebfd80d3ef4346578335a9a72aeaee59ff6cb3582b35133d50";
+  const EIP1822        = "0xc5f16f0fcc639fa48a6947836d9850f504798523bf8c9a3a87d5876cf622bcf7";
+
+  const toAddr = (slot) => {
+    const v = slot?.slice(-40);
+    return v && v !== "0".repeat(40) ? "0x" + v : null;
+  };
+
+  try {
+    const [impl, beacon, uups] = await Promise.all([
+      rpc("eth_getStorageAt", [address, EIP1967_IMPL, "latest"]),
+      rpc("eth_getStorageAt", [address, EIP1967_BEACON, "latest"]),
+      rpc("eth_getStorageAt", [address, EIP1822, "latest"]),
+    ]);
+    const implAddr = toAddr(impl);
+    if (implAddr) return { type: "EIP-1967", impl: implAddr };
+    const beaconAddr = toAddr(beacon);
+    if (beaconAddr) return { type: "EIP-1967 Beacon", impl: beaconAddr };
+    const uupsAddr = toAddr(uups);
+    if (uupsAddr) return { type: "EIP-1822 UUPS", impl: uupsAddr };
+  } catch {}
+  return null;
+}
+
 async function decompileContract(address) {
   address = address.toLowerCase();
   const name = `contract_${address.slice(2, 10)}`;
@@ -443,6 +470,16 @@ async function decompileContract(address) {
   console.log(`\n${"=".repeat(60)}`);
   console.log(`Contract: ${address}`);
   console.log("=".repeat(60));
+
+  // --- Proxy detection ---
+  process.stdout.write("Proxy check... ");
+  const proxy = await detectProxy(address);
+  if (proxy) {
+    console.log(`${proxy.type} -> ${proxy.impl}`);
+    console.log(`Decompiling implementation instead...\n`);
+    return decompileContract(proxy.impl);
+  }
+  console.log("không phải proxy.");
 
   // --- Sourcify ---
   process.stdout.write("Tìm verified source (Sourcify)... ");
