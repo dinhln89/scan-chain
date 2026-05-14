@@ -10,7 +10,9 @@ const { rpc } = require("../core/trace");
 
 const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const TEMP_DIR = path.resolve(__dirname, "../.temp");
-const GIGAHORSE = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse");
+const PROJECT_ROOT = path.resolve(__dirname, "..");
+const GIGAHORSE_BIN = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse");
+const GIGAHORSE_IMAGE = process.env.GIGAHORSE_IMAGE || "gigahorse-toolchain";
 const TIMEOUT = process.env.DECOMPILE_TIMEOUT || 600;
 const BSC_CHAIN_ID = 56;
 const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
@@ -604,16 +606,36 @@ async function decompileContract(address) {
 
     console.log(`Decompiling (timeout: ${TIMEOUT}s)...`);
     try {
-      execSync(
-        [
-          GIGAHORSE,
+      let cmd, opts;
+      if (fs.existsSync(GIGAHORSE_BIN)) {
+        cmd = [
+          GIGAHORSE_BIN,
           "--interpreted",
           `-T ${TIMEOUT}`,
           `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
           hexFile,
-        ].join(" "),
-        { stdio: "inherit", cwd: path.resolve(__dirname, "..") }
-      );
+        ].join(" ");
+        opts = { stdio: "inherit", cwd: PROJECT_ROOT };
+      } else {
+        // Pre-create .temp so the container user can write into it
+        fs.mkdirSync(TEMP_DIR, { recursive: true });
+        const relHex = path.relative(PROJECT_ROOT, hexFile);
+        cmd = [
+          "docker run --rm",
+          `--workdir /tmp`,
+          `-u ${process.getuid()}:${process.getgid()}`,
+          `-v ${PROJECT_ROOT}:/workspace`,
+          GIGAHORSE_IMAGE,
+          "--interpreted",
+          `-T ${TIMEOUT}`,
+          `-C /workspace/decompile/clients/visualizeout.py`,
+          `-w /workspace/.temp`,
+          `-r /tmp/results.json`,
+          `/workspace/${relHex}`,
+        ].join(" ");
+        opts = { stdio: "inherit" };
+      }
+      execSync(cmd, opts);
     } catch {
       console.error("gigahorse thất bại");
       return;

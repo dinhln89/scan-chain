@@ -4,5 +4,16 @@
   "0xd4d933f0": "stakedMlpTracker()",
   "0xef4500d8": "initialize((address,address,address,address,address,address,address,address,address,address,address,address,address))",
   "0xf5e35879": "mintAndStakeMlp(address,uint256,uint256,uint256)",
-  "0xfc8b6fc1": "feeMlpTracker()"
+  "0xfc8b6fc1": "feeMlpTracker()",
+  "0xfc0c546a": "token()",
+  "0xf2fde38b": "transferOwnership(address)",
+  "0xd63a6ccd": "usd()",
+  "0xc31c9c07": "swapRouter()",
+  "0xc0c53b8b": "initialize(address,address,address)",
+  "0x8da5cb5b": "owner()",
+  "0x7313ee5a": "vestingPeriod()",
+  "0x715018a6": "renounceOwnership()",
+  "0x379607f5": "claim(uint256)",
+  "0x264e9cbf": "setVestingTerm(uint256)",
+  "0x2186ff4e": "received(uint256,address,uint256)"
 }

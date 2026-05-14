@@ -18,8 +18,8 @@ RUN chmod -R o+rwx /opt/gigahorse
 # Switch to new 'gigahorse' user context
 USER gigahorse
 
-# Souffle-addon bare-minimum make
-RUN cd /opt/gigahorse/gigahorse-toolchain/souffle-addon && make libsoufflenum.so
+# Souffle-addon bare-minimum make (override CC/CXX since base image may not have gcc-15)
+RUN cd /opt/gigahorse/gigahorse-toolchain/souffle-addon && make libsoufflenum.so CC=gcc CXX=g++
 
 CMD ["-h"]
 ENTRYPOINT ["/opt/gigahorse/gigahorse-toolchain/gigahorse.py"]
