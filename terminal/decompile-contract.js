@@ -415,9 +415,8 @@ async function buildPseudoSolidity(outDir, address) {
     const name = resolvedNames.get(block);
     if (!name) continue;
     const analysis = fnAnalysis.get(block) || {};
-    const payable = analysis.payable ? " payable" : "";
     const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
-    const sig = `external${payable} ${name}${ret}`;
+    const sig = `external ${name}${ret}`;
     if (analysis.mutating) mutatingList.push(sig);
     else viewList.push(sig);
   }
@@ -440,9 +439,8 @@ async function buildPseudoSolidity(outDir, address) {
     const name = resolvedNames.get(block);
     if (!name) continue;
     const analysis = fnAnalysis.get(block) || {};
-    const payable = analysis.payable ? " payable" : "";
     const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
-    const sig = `external${payable} ${name}${ret}`;
+    const sig = `external ${name}${ret}`;
 
     // Detect initializer: by pattern hoặc by tên
     const fnBaseName = name.split("(")[0];
