@@ -441,11 +441,18 @@ async function buildPseudoSolidity(outDir, address) {
   }
 
   // Sort tất cả
-  for (const list of [...ownerGroups.values(), nonOwnerMutating, nonOwnerView]) {
+  for (const list of [...ownerGroups.values(), initList, nonOwnerMutating, nonOwnerView]) {
     list.sort((a, b) => a.localeCompare(b));
   }
 
-  // In access-controlled groups
+  // Initializers
+  if (initList.length > 0) {
+    lines.push(`// One-time init (${initList.length}):`);
+    initList.forEach((sig) => lines.push(`// function ${sig}`));
+    lines.push("");
+  }
+
+  // Access-controlled groups
   for (const [slot, list] of [...ownerGroups.entries()].sort()) {
     lines.push(`// Access-controlled [require(msg.sender == ${slotLabel(slot)})] (${list.length}):`);
     list.forEach((sig) => lines.push(`// function ${sig}`));
