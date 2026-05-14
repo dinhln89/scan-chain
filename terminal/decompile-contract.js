@@ -164,7 +164,39 @@ function analyzeFunctions(tacFile, addressVars, boolVars) {
     }
 
     const mutating = block.includes(" SSTORE ");
-    result.set(blockAddr, { payable: isPayable, retType, mutating });
+
+    // Detect owner-check: CALLER → EQ pattern
+    const callerVars = new Set([...block.matchAll(/: (\S+) = CALLER/g)].map((m) => m[1]));
+    let ownerSlot = null;
+    if (callerVars.size > 0) {
+      // Build local sloadSlot + andFrom từ block
+      const localSload = new Map();
+      const localAndFrom = new Map();
+      for (const line of block.split("\n")) {
+        let m = line.match(/:\s+(\S+) = SLOAD \S+\((0x[0-9a-f]+)\)/);
+        if (m) localSload.set(m[1], m[2]);
+        m = line.match(/:\s+(\S+) = AND (\S+)\([^)]+\), (\S+)$/) ||
+            line.match(/:\s+(\S+) = AND (\S+), (\S+)\([^)]+\)$/);
+        if (m) localAndFrom.set(m[1], m[3] || m[2]);
+      }
+      const traceSlot = (v, d = 0) => {
+        if (d > 8) return null;
+        if (localSload.has(v)) return localSload.get(v);
+        if (localAndFrom.has(v)) return traceSlot(localAndFrom.get(v), d + 1);
+        return null;
+      };
+      for (const m of block.matchAll(/: (\S+) = EQ (\S+), (\S+)/g)) {
+        const [, , op1, op2] = m;
+        for (const op of [op1, op2]) {
+          if (callerVars.has(op)) continue;
+          const s = traceSlot(op);
+          if (s) { ownerSlot = s; break; }
+        }
+        if (ownerSlot) break;
+      }
+    }
+
+    result.set(blockAddr, { payable: isPayable, retType, mutating, ownerSlot });
   }
   return result;
 }
