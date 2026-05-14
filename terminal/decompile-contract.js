@@ -43,11 +43,37 @@ function httpsGet(url) {
   });
 }
 
-// Tra cứu tên function từ 4byte.directory (free, no API key)
-async function lookup4byte(selector) {
-  const cache = load4byteCache();
-  if (selector in cache) return cache[selector]; // null cũng được cache
+// Lazy-load FourByteSelector model (DB có thể không kết nối được)
+let _FourByteSelector = null;
+async function getFourByteSelectorModel() {
+  if (_FourByteSelector) return _FourByteSelector;
+  try {
+    const sequelize = require("../db");
+    await sequelize.ensureDatabase();
+    _FourByteSelector = require("../models/FourByteSelector");
+    await _FourByteSelector.sync();
+  } catch {
+    _FourByteSelector = null;
+  }
+  return _FourByteSelector;
+}
 
+// Tra cứu tên function: DB → JSON cache → 4byte.directory API
+async function lookup4byte(selector) {
+  // 1. Thử DB
+  const model = await getFourByteSelectorModel();
+  if (model) {
+    try {
+      const row = await model.findByPk(selector);
+      if (row) return row.signature;
+    } catch {}
+  }
+
+  // 2. Thử JSON cache
+  const cache = load4byteCache();
+  if (selector in cache) return cache[selector];
+
+  // 3. Hit 4byte.directory API
   const url = `https://www.4byte.directory/api/v1/signatures/?hex_signature=${selector}`;
   let result = null;
   try {
@@ -61,8 +87,14 @@ async function lookup4byte(selector) {
     }
   } catch {}
 
-  cache[selector] = result;
-  save4byteCache();
+  if (result !== null) {
+    // Lưu vào DB và JSON cache
+    if (model) {
+      try { await model.upsert({ selector, signature: result }); } catch {}
+    }
+    cache[selector] = result;
+    save4byteCache();
+  }
   return result;
 }
 
