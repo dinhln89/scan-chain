@@ -1,0 +1,184 @@
+// This is a client for the decompiler that is responsible
+// for testing out the CFG construction by finding loops.
+// It should be as simple as possible so that we can easily
+// compare between distant versions of the decompiler
+#include "../clientlib/decompiler_imports.dl"
+
+// Has many dependencies, incl memory modeling and data structures
+#include "../clientlib/guards.dl"
+
+/**
+  Loop-related analytics
+*/
+
+.decl Analytics_Loop(loop: Block)
+.output Analytics_Loop
+
+// Loop has not high-level control flow (i.e. many exits or jump to manys)
+.decl Analytics_NonHighLevelLoop(loop: Block)
+.output Analytics_NonHighLevelLoop
+
+/**
+  Loop has non high-level control flow (i.e. many or no exits), without having jump to manys 
+  This is the most useful analytic.
+*/
+.decl Analytics_NonHighLevelLoopFiltered(loop: Block)
+.output Analytics_NonHighLevelLoopFiltered
+
+Analytics_Loop(loop):-
+  BlockInStructuredLoop(_, loop).
+
+Analytics_NonHighLevelLoop(loop):-
+  Analytics_Loop(loop),
+  !HighLevelLoop(loop).
+
+Analytics_NonHighLevelLoop(loop):-
+  Analytics_Loop(loop),
+  0 != count: {BlockInStructuredLoop(block, loop), JumpToMany(block)}.
+
+Analytics_NonHighLevelLoopFiltered(loop):-
+  Analytics_Loop(loop),
+  !HighLevelLoop(loop),
+  0 = count: {BlockInStructuredLoop(block, loop), JumpToMany(block)}.
+
+.decl JumpToMany(block: Block)
+JumpToMany(block):-
+  (Statement_Opcode(jump, "JUMP");
+  Statement_Opcode(jump, "CALLPRIVATE")),
+  Statement_Block(jump, block),
+  nEdges = count : LocalBlockEdge(block, _), nEdges > 1.
+
+JumpToMany(block):-
+  Statement_Opcode(jump, "JUMPI"),
+  Statement_Block(jump, block),
+  nEdges = count : LocalBlockEdge(block, _), nEdges > 2.
+
+/**
+ * Memory Modeling
+ */
+
+.decl Analytics_CallToSignature(sigHashVal: Value)
+.output Analytics_CallToSignature
+
+.decl Analytics_ERC20TransferCall(call:Statement)
+.output Analytics_ERC20TransferCall
+
+.decl Analytics_ERC20TransferFromCall(call:Statement)
+.output Analytics_ERC20TransferFromCall
+
+.decl Analytics_ERC20ApproveCall(call:Statement)
+.output Analytics_ERC20ApproveCall
+
+.decl Analytics_ExternalCallActualReturn(call: Statement, actual: Variable, index: number)
+.output Analytics_ExternalCallActualReturn
+
+Analytics_CallToSignature(substr(sigHashVal, 0, 10)) :-
+  CALLStatement(call, _),
+  StatementUsesMemory_ActualMemoryArg(call, _, 0, actual),
+  Variable_Value(actual, sigHashVal).
+
+Analytics_ERC20TransferCall(call):-
+  ERC20TransferCall(call, _, _).
+
+Analytics_ERC20TransferFromCall(call):-
+  ERC20TransferFromCall(call, _, _, _).
+
+Analytics_ERC20ApproveCall(call):-
+  ERC20ApproveCall(call, _, _).
+
+Analytics_ExternalCallActualReturn(call, actual, index):-
+  ExternalCall_ActualReturn(call, actual, index).
+
+
+.decl Analytics_RevertSigUsed(sig: symbol)
+.output Analytics_RevertSigUsed
+
+Analytics_RevertSigUsed(sig):-
+  RevertToSignature(_, sig).
+
+
+.decl Analytics_EventSignature(sigHashVal: Value)
+.output Analytics_EventSignature
+
+Analytics_EventSignature(sigHashVal) :-
+  LOGStatement(log, _),
+  Statement_Uses(log, actual, 2),
+  Variable_Value(actual, sigHashVal).
+
+.decl Analytics_CREATE2WithInitCode(create2: Statement, initCode: symbol)
+.output Analytics_CREATE2WithInitCode
+
+Analytics_CREATE2WithInitCode(create2, initCode):-
+  CREATE2WithInitCode(create2, initCode).
+
+.decl Analytics_ConstArrayContents(contents: symbol)
+.output Analytics_ConstArrayContents
+
+Analytics_ConstArrayContents(contents):-
+  ConstArray_Contents(_, contents).
+
+/**
+ * Guards
+ */
+
+.decl Analytics_SenderGuard(glovalVar: Value)
+.output Analytics_SenderGuard
+
+Analytics_SenderGuard(globalVar):-
+  SenderGuard(globalVar, _).
+
+
+/**
+ * Storage Modeling
+ */
+
+.decl Analytics_GlobalVariable(globalVar: symbol)
+.output Analytics_GlobalVariable
+
+Analytics_GlobalVariable(globalVar):-
+  GlobalVariable(globalVar).
+
+.decl Analytics_Map(globalVar: symbol)
+.output Analytics_Map
+
+Analytics_Map(globalVar):-
+  MapElementStmt(_, globalVar, _).
+
+.decl Analytics_StorageArray(globalVar: symbol)
+.output Analytics_StorageArray
+
+Analytics_StorageArray(globalVar):-
+  ArrayElementStmt(_, globalVar, _).
+
+.decl Analytics_UselessSLOAD(stmt: Statement)
+.output Analytics_UselessSLOAD
+
+Analytics_UselessSLOAD(stmt):-
+  UselessSLOAD(stmt).
+/**
+  New storage model analytics
+*/
+.decl Verbatim_StorageOffset_Type(offset: Value, type: symbol)
+.output Verbatim_StorageOffset_Type
+
+Verbatim_StorageOffset_Type(offset, type):-
+  StorageOffset_Type(offset, type).
+
+.decl Verbatim_StorageVariableType(varId: symbol, type: symbol)
+.output Verbatim_StorageVariableType
+
+Verbatim_StorageVariableType(storVar, type):-
+  StorageVariableType(storVar, type).
+
+.decl Verbatim_StructToString(structID: symbol, stringStruct: symbol)
+.output Verbatim_StructToString
+
+Verbatim_StructToString(structID, stringStruct):-
+  StructToString(structID, stringStruct).
+
+.decl Analytics_StructWithNoStringRep(structID: symbol)
+.output Analytics_StructWithNoStringRep
+
+Analytics_StructWithNoStringRep(structID):-
+  DataStructureValueIsStruct(_, _, structID, _),
+  !StructToString(structID, _).

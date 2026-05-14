@@ -1,0 +1,832 @@
+
+// TODO: Add shifts to `castsAndShiftsFlows`!!!!!!!!!
+// Maybe they are not there for a reason?
+// Example: 4b053890c3ceb6c77358d624bd0c10bb: 0x6a
+.init castsAndShiftsFlows = LocalFlowAnalysis
+castsAndShiftsFlows.TransferStmt(stmt):-
+  Statement_Opcode(stmt, "OR").
+
+castsAndShiftsFlows.TransferStmt(stmt):-
+  (AND(stmt, maskVar, _, _) ; AND(stmt, _, maskVar, _)),
+  BasicVariable_Value(maskVar, byteMask),
+  ValueIsByteMask(byteMask).
+
+// castsAndShiftsFlows.InitialFlowVar(v):- isVariable(v).
+castsAndShiftsFlows.TransferBoundary(b):- IsBlock(b).
+
+.decl FlowsToSTOREOfConstruct(var: Variable, construct: StorageConstruct)
+DEBUG_OUTPUT(FlowsToSTOREOfConstruct)
+
+/**
+  More general version of `LOADandSTORESameIndex`,
+  as a fallback it considers cases where the index is not the same but operated `construct` is.
+*/
+.decl LOADFlowsToSTORE(sload: Statement, sstore: Statement, construct: StorageConstruct)
+DEBUG_OUTPUT(LOADFlowsToSTORE)
+
+/**
+  `sload` and `sstore` operate on the same `storageIndex` (most likely also indexVar)
+  and the `loadedVar` flows to the `storedVar` through cast and shift operations
+*/
+.decl LOADandSTORESameIndex(sload: Statement, sstore: Statement)
+DEBUG_OUTPUT(LOADandSTORESameIndex)
+
+/**
+  Find vars that are used in bit masking operations when updating a tightly packed variable.
+*/
+.decl VarFlowsFromLOADToSTORE(var: Variable, construct: StorageConstruct)
+DEBUG_OUTPUT(VarFlowsFromLOADToSTORE)
+
+
+LOADandSTORESameIndex(sload, sstore):-
+  InitialStorageStmtToIndexAndConstruct(sload, "ACCESS", $Storage(), index, construct),
+  SLOAD(sload, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, storedVar),
+  SSTORE(sstore, _, storedVar),
+  InitialStorageStmtToIndexAndConstruct(sstore, "ACCESS", $Storage(), index, construct).
+
+LOADandSTORESameIndex(load, store):-
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $TransientStorage(), index, construct),
+  TLOAD(load, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, storedVar),
+  TSTORE(store, _, storedVar),
+  InitialStorageStmtToIndexAndConstruct(store, "ACCESS", $TransientStorage(), index, construct).
+
+LOADFlowsToSTORE(load, store, construct):-
+  LOADandSTORESameIndex(load, store),
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $Storage(), _, construct).
+
+LOADFlowsToSTORE(load, store, construct):-
+  LOADandSTORESameIndex(load, store),
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $TransientStorage(), _, construct).
+
+LOADFlowsToSTORE(sload, sstore, construct):-
+  InitialStorageStmtToIndexAndConstruct(sload, "ACCESS", $Storage(), _, construct),
+  SLOAD(sload, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, storedVar),
+  SSTORE(sstore, _, storedVar),
+  InitialStorageStmtToIndexAndConstruct(sstore, "ACCESS", $Storage(), _, construct),
+  !LOADandSTORESameIndex(_, sstore).
+
+LOADFlowsToSTORE(load, store, construct):-
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $TransientStorage(), _, construct),
+  TLOAD(load, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, storedVar),
+  TSTORE(store, _, storedVar),
+  InitialStorageStmtToIndexAndConstruct(store, "ACCESS", $TransientStorage(), _, construct),
+  !LOADandSTORESameIndex(_, store).
+
+VarFlowsFromLOADToSTORE(var, construct):-
+  LOADFlowsToSTORE(sload, sstore, construct),
+  SLOAD(sload, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, var),
+  castsAndShiftsFlows.Flows(var, storedVar),
+  SSTORE(sstore, _, storedVar).
+
+VarFlowsFromLOADToSTORE(var, construct):-
+  LOADFlowsToSTORE(sload, sstore, construct),
+  TLOAD(sload, _, loadedVar),
+  castsAndShiftsFlows.Flows(loadedVar, var),
+  castsAndShiftsFlows.Flows(var, storedVar),
+  TSTORE(sstore, _, storedVar).
+
+FlowsToSTOREOfConstruct(var, construct):-
+  InitialStorageStmtToIndexAndConstruct(sstore, "ACCESS", $Storage(), _, construct),
+  SSTORE(sstore, _, storedVar),
+  LocalFlows(var, storedVar).
+
+FlowsToSTOREOfConstruct(var, construct):-
+  InitialStorageStmtToIndexAndConstruct(store, "ACCESS", $TransientStorage(), _, construct),
+  TSTORE(store, _, storedVar),
+  LocalFlows(var, storedVar).
+
+.decl SLOADOfConst(sload: Statement, const: Value, var: Variable)
+.decl SSTOREToConst(sstore: Statement, const: Value, var: Variable)
+
+SLOADOfConst(sload, const, var):-
+  SLOAD(sload, constVar, var),
+  Variable_Value(constVar, const).
+
+SSTOREToConst(sstore, const, var):-
+  SSTORE(sstore, constVar, var),
+  Variable_Value(constVar, const).
+
+.decl LOADOfConstruct(sload: Statement, loc: StorageLocation, construct: StorageConstruct, var: Variable)
+.decl STOREToConstruct(sstore: Statement, loc: StorageLocation, construct: StorageConstruct, var: Variable)
+
+LOADOfConstruct(sload, loc, construct, var):-
+  SLOAD(sload, _, var),
+  InitialStorageStmtToIndexAndConstruct(sload, "ACCESS", loc, _, construct).
+
+LOADOfConstruct(tload, loc, construct, var):-
+  TLOAD(tload, _, var),
+  InitialStorageStmtToIndexAndConstruct(tload, "ACCESS", loc, _, construct).
+
+STOREToConstruct(sstore, loc, construct, var):-
+  SSTORE(sstore, _, var),
+  InitialStorageStmtToIndexAndConstruct(sstore, "ACCESS", loc, _, construct).
+
+STOREToConstruct(tstore, loc, construct, var):-
+  TSTORE(tstore, _, var),
+  InitialStorageStmtToIndexAndConstruct(tstore, "ACCESS", loc, _, construct).
+
+/**
+  Variable holds a range of bytes from a storage word. Relies on `VarHoldsBytesOfStorVarPlus`.
+  __Note__: Contains both top-level global variables and storage constructs as they
+  both need the same handling for word sharing in storage slots. They are differentiated later.
+*/
+.decl VarHoldsBytesOfStorVar(var: Variable, srcLoad: Statement, location: StorageLocation, storVar: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(VarHoldsBytesOfStorVar)
+
+/**
+  Variable holds a range of bytes from a storage word, starting from `startByte`.
+  __Note__: Contains both top-level global variables and storage constructs as they
+  both need the same handling for word sharing in storage slots. They are differentiated later.
+*/
+.decl VarHoldsBytesOfStorVarPlus(var: Variable, srcLoad: Statement, location: StorageLocation, storVar: StorageConstruct, startByte: number, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(VarHoldsBytesOfStorVarPlus)
+
+/**
+  This is a heuristic, we use the "Final" forms of loaded vars
+  (seeing when a variable from storage is no longer shifted or masked)
+  to see that the limits of merged variables are modeled correctly
+  but then any VarHoldsBytesOfStorVar corresponding to a valid variable
+  is considered a LOAD of that variable.
+
+  __Note__: Contains both top-level global variables and storage constructs as they
+  both need the same handling for word sharing in storage slots. They are differentiated later.
+*/
+.decl VarHoldsBytesOfStorVarFinal(var: Variable, srcLoad: Statement, loc: StorageLocation, storVar: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(VarHoldsBytesOfStorVarFinal)
+
+VarHoldsBytesOfStorVarPlus(to, load, $Storage(), construct, 0, 0, 31):-
+  SLOAD(load, _, to),
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $Storage(), _, construct).
+
+VarHoldsBytesOfStorVarPlus(to, load, $TransientStorage(), construct, 0, 0, 31):-
+  TLOAD(load, _, to),
+  InitialStorageStmtToIndexAndConstruct(load, "ACCESS", $TransientStorage(), _, construct).
+
+VarHoldsBytesOfStorVar(var, load, loc, storVar, low, high):-
+  VarHoldsBytesOfStorVarPlus(var, load, loc, storVar, _, low, high).
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, max(startByte - bytes, 0), low + bytes - startByte, high):-
+  VarHoldsBytesOfStorVarPlus(shiftedVar, load, loc, storVar, startByte, low, high),
+  RShiftBytes(shiftedVar, to, bytes).
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, startByte + bytes, low, high):-
+  VarHoldsBytesOfStorVarPlus(shiftedVar, load, loc, storVar, startByte, low, high),
+  LShiftBytes(shiftedVar, to, bytes),
+  width = 1 + high - low,
+  startByte + bytes + width <= 32.
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, startByte + bytes, low, high - extraBytes):-
+  VarHoldsBytesOfStorVarPlus(shiftedVar, load, loc, storVar, startByte, low, high),
+  LShiftBytes(shiftedVar, to, bytes),
+  width = 1 + high - low,
+  startByte + bytes + width > 32,
+  extraBytes = startByte + bytes + width - 32.
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, startByte, low, newHigh):-
+  VarHoldsBytesOfStorVarPlus(var, load, loc, storVar, startByte, low, high),
+  minKeptByte = min(startByte + high, startByte + low + maskLen - 1),
+  newHigh =  minKeptByte - startByte,
+  LowBytesMaskOp(var, to, maskLen).
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, 0, low, low):-
+  VarHoldsBytesOfStorVarPlus(from, load, loc, storVar, 0, low, low),
+  BooleanCast(from, to).
+
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, newStartByte, newLow, high):-
+  VarHoldsBytesOfStorVarPlus(var, load, loc, storVar, startByte, low, high),
+  maxKeptByte = max(startByte + low, startByte + high - maskLen + 1),
+  newLow = maxKeptByte - startByte,
+  newStartByte = max(32 - maskLen, startByte),
+  HighBytesMaskOp(var, to, maskLen).
+
+// Note: This is usually an intermediary case, to restore it to some storage bytes.
+// It could potentially lead to FPs, but not having it would introduce FNs, to revisit
+// That's the reason it's more restrictive (it will keep the bytes of the previous var is they are all kept)
+VarHoldsBytesOfStorVarPlus(to, load, loc, storVar, startByte, low, high):-
+  VarHoldsBytesOfStorVarPlus(var, load, loc, storVar, startByte, low, high),
+  width = high - low,
+  ByteMaskOpKeepRange(var, to, [keepLow, keepHigh]),
+  keepLow <= startByte, keepHigh >= startByte + width.
+
+VarHoldsBytesOfStorVarFinal(var, load, loc, storVar, low, high):-
+  VarHoldsBytesOfStorVar(var, load, loc, storVar, low, high),
+  !VarFlowsFromLOADToSTORE(var, storVar), // Could potentially be restrictive for rare cases in optimized code
+  !LShiftBytes(var, _, _),
+  !RShiftBytes(var, _, _),
+  !LowBytesMaskOp(var, _, _),
+  // !BooleanCast(var, _),
+  !HighBytesMaskOp(var, _, _),
+  !AntiMaskOp(var, _, _, _).
+
+
+VarHoldsBytesOfStorVarFinal(var, load, loc, storVar, low, high):-
+  VarHoldsBytesOfStorVar(var, load, loc, storVar, low, high),
+  VariableUsedInEndLevelOperation(var).
+
+// end-level in regards to byte-level shifting/casting trasformations (is incomplete)
+.decl VariableUsedInEndLevelOperation(var: Variable)
+VariableUsedInEndLevelOperation(var):-
+  MSTORE(_, _, var); ActualArgs(_, var, _); ActualReturnArgs(_, var, _);
+  LT(_, var, _, _); LT(_, _, var, _); GT(_, var, _, _); GT(_, _, var, _);
+  SLT(_, var, _, _); SLT(_, _, var, _); SGT(_, var, _, _); SGT(_, _, var, _);
+  EQ(_, var, _, _); EQ(_, _, var, _).
+
+.decl AnyLoadStoreStorVarBytes(loadOrStore: Statement, location: StorageLocation, storVar: StorageConstruct, low: number, high: number)
+DEBUG_OUTPUT(AnyLoadStoreStorVarBytes)
+
+.decl FailedMergedStorageModeling(location: StorageLocation, storVar: StorageConstruct)
+DEBUG_OUTPUT(FailedMergedStorageModeling)
+
+.decl FailedMergedStorageModelingReason(location: StorageLocation, storVar: StorageConstruct, stmt: Statement, stmt2: Statement, range1: Range, range2: Range)
+DEBUG_OUTPUT(FailedMergedStorageModelingReason)
+
+.decl SuccessfulMergedStorageModeling(location: StorageLocation, storVar: StorageConstruct)
+DEBUG_OUTPUT(SuccessfulMergedStorageModeling)
+
+.decl LoadOrStoreToStoreVar(stmt: Statement, location: StorageLocation, storVar: StorageConstruct)
+
+AnyLoadStoreStorVarBytes(stmt, loc, storVar, low, high):-
+  VarHoldsBytesOfStorVarFinal(_, stmt, loc, storVar, low, high);
+  VarWrittenToBytesOfStorVar(_, stmt, loc, storVar, low, high);
+  ConstWrittenToUnreadBytesOfStorVar(_, stmt, _, loc, storVar, low, high).
+
+// rare case, a variable is never read directly, but only stored
+// try to capture it with 2 simple rules
+VarWrittenToBytesOfStorVar(var, store, loc, construct, 0, 31):-
+  STOREToConstruct(store, loc, construct, var),
+  !Variable_Value(var, _),
+  !LowBytesMaskOp(_, var, _),
+  !LOADOfConstruct(_, loc, construct, _).
+
+// This pattern will be used when an array is shortened (replaced with a smaller one)
+// in via-ir code
+VarWrittenToBytesOfStorVar(var, store, loc, construct, 0, numOfBytes - 1):-
+  STOREToConstruct(store, loc, construct, var),
+  LowBytesMaskOp(_, var, numOfBytes),
+  !Variable_Value(var, _),
+  !LOADOfConstruct(_, loc, construct, _).
+
+// Added for completeness to revisit
+ConstWrittenToBytesOfStorVar(var, val, store, store, loc, construct, 0, 31):-
+  STOREToConstruct(store, loc, construct, var),
+  Variable_Value(var, val),
+  // 0x0 is handled differently due to new viaIR delete patterns
+  val != "0x0".
+  // !LOADOfConstruct(_, construct, _).
+
+// FailedMergedStorageModelingReason(storVar, stmt, stmt2, [low, high], [otherLow, otherHigh]),
+// FailedMergedStorageModeling(storVar):-
+//   AnyLoadStoreStorVarBytes(stmt, storVar, low, high),
+//   AnyLoadStoreStorVarBytes(stmt2, storVar, otherLow, otherHigh),  otherLow = otherLow, otherHigh = otherHigh, // NOWARN
+//   (low != otherLow ; high != otherHigh),
+//   ( (low < otherLow , otherLow < high) ; (low < otherHigh, otherHigh < high) ).
+
+FailedMergedStorageModelingReason(loc, storVar, stmt, stmt2, [low, high], [otherLow, otherHigh]),
+FailedMergedStorageModeling(loc, storVar):-
+  AnyLoadStoreStorVarBytes(stmt, loc, storVar, low, high),
+  AnyLoadStoreStorVarBytes(stmt2, loc, storVar, otherLow, otherHigh),
+  low != otherLow, high != otherHigh,
+  ( (low < otherLow , otherLow < high) ; (low < otherHigh, otherHigh < high) ).
+
+FailedMergedStorageModelingReason(loc, storVar, stmt, stmt2, [low, high], [otherLow, high]),
+FailedMergedStorageModeling(loc, storVar):-
+  AnyLoadStoreStorVarBytes(stmt, loc, storVar, low, high),
+  AnyLoadStoreStorVarBytes(stmt2, loc, storVar, otherLow, high),
+  low != otherLow,
+  low < otherLow , otherLow < high.
+
+// FailedMergedStorageModelingReason(storVar, stmt, stmt2, [low, high], [otherLow, otherHigh]),
+// FailedMergedStorageModeling(storVar):-
+//   AnyLoadStoreStorVarBytes(stmt, storVar, low, high),
+//   AnyLoadStoreStorVarBytes(stmt2, storVar, otherLow, otherHigh),  otherLow = otherLow, otherHigh = otherHigh, // NOWARN
+//   (low != otherLow ; high != otherHigh),
+//   ( (low < otherLow , otherLow < high) ; (low < otherHigh, otherHigh < high) ).
+
+LoadOrStoreToStoreVar(stmt, loc, construct):-
+  InitialStorageStmtToIndexAndConstruct(stmt, "ACCESS", loc, _, construct).
+
+FailedMergedStorageModelingReason(loc, storVar, stmt, stmt, nil, nil),
+FailedMergedStorageModeling(loc, storVar):-
+  AnyLoadStoreStorVarBytes(_, loc, storVar, _, _),
+  LoadOrStoreToStoreVar(stmt, loc, storVar),
+  !UselessSLOAD(stmt),
+  !AnyLoadStoreStorVarBytes(stmt, loc, storVar, _, _),
+  !BytesOfStorVarKept(_, stmt, loc, storVar, _, _),
+  !DeleteOfStructSlot(stmt, loc, storVar),
+  !ConstWrittenToBytesOfStorVar(_, _, stmt, _, loc, storVar, _, _),
+  !ConstWrittenToBytesOfStorVar(_, _, _, stmt, loc, storVar, _, _).
+
+
+SuccessfulMergedStorageModeling(loc, storVar):-
+  AnyLoadStoreStorVarBytes(_, loc, storVar, _, _),
+  !FailedMergedStorageModeling(loc, storVar).
+
+/**
+  Models complex expressions of many shifted and masked vars to update a single storage slot.
+  Bytes `byteLow` to `byteHigh` of `var` hold `writtenVarOrConst` which is of ("CONST" of "VAR") `kind`.
+*/
+.decl ProbablyPartialStorageUpdateSequenceWrite(var: Variable, kind: symbol, writtenVarOrConst: symbol, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(ProbablyPartialStorageUpdateSequenceWrite)
+
+/**
+  Models complex expressions of many shifted and masked vars to update a single storage slot.
+  Bytes `byteLow` to `byteHigh` of `var` hold the existing bytes stored in the storage slot of `storVar`, as loaded in `load`.
+*/
+.decl ProbablyPartialStorageUpdateSequenceKeep(var: Variable, load: Statement, location: StorageLocation, storVar: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(ProbablyPartialStorageUpdateSequenceKeep)
+
+/**
+  A single addition to a complex expression updating a tightly packed storage slot.
+  Complex expression in `toVar` is the one in `fromVar` with the addition of `varOrConst` which is of ("CONST" of "VAR") `kind`
+  in bytes `byteLow` to `byteHigh`.
+*/
+.decl ProbablyPartialStorageUpdatePattern(fromVar: Variable, toVar: Variable, kind: symbol, varOrConst: symbol, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(ProbablyPartialStorageUpdatePattern)
+
+.decl VarWrittenToBytesOfStorVar(var: Variable, store: Statement, location: StorageLocation, storVar: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(VarWrittenToBytesOfStorVar)
+
+/**
+ Special case of `VarWrittenToBytesOfStorVar` to fix a bug when writting from one storage location to another,
+*/
+.decl VarWrittenToBytesOfStorVarIsMergedVar(var:Variable, modeledVar:Variable, store:Statement, location: StorageLocation, storVar:StorageConstruct, byteLow:number, byteHigh:number)
+
+/**
+  Filtered `VarWrittenToBytesOfStorVar`, taking `VarWrittenToBytesOfStorVarIsMergedVar` into account.
+*/
+.decl VarWrittenToBytesOfStorVarFinal(var:Variable, store:Statement, location: StorageLocation, storVar:StorageConstruct, byteLow:number, byteHigh:number)
+
+.decl ConstWrittenToBytesOfStorVar(constVar:Variable, const:Value, store:Statement, load:Statement, location: StorageLocation, storVar:StorageConstruct, byteLow:number, byteHigh:number)
+DEBUG_OUTPUT(ConstWrittenToBytesOfStorVar)
+
+/**
+  Results of ConstWrittenToBytesOfStorVar processed after identifying the variables
+*/
+.decl ConstWrittenToBytesOfStorVarProcessed(constVar:Variable, const:Value, store:Statement, load:Statement, location: StorageLocation, storVar:StorageConstruct, byteLow:number, byteHigh:number)
+DEBUG_OUTPUT(ConstWrittenToBytesOfStorVarProcessed)
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "VAR", writtenVar, byteLow, byteLow + castedTo - 1):-
+  CastedAndShiftedVar(writtenVar, castedNShifted, byteLow, castedTo),
+  (OR(_, castedNShifted, fromVar, toVar) ; OR(_, fromVar, castedNShifted, toVar)),
+  FlowsToSTOREOfConstruct(writtenVar, construct),
+  !VarFlowsFromLOADToSTORE(writtenVar, construct).
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "VAR", writtenVar, 0, byteHigh - 1):-
+  LowBytesMaskOp(writtenVar, castedVar, byteHigh),
+  (OR(_, castedVar, fromVar, toVar) ; OR(_, fromVar, castedVar, toVar)),
+  FlowsToSTOREOfConstruct(writtenVar, construct),
+  !VarFlowsFromLOADToSTORE(writtenVar, construct).
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "VAR", writtenVar, 0, 0):-
+  BooleanCast(writtenVar, castedVar),
+  (OR(_, castedVar, fromVar, toVar) ; OR(_, fromVar, castedVar, toVar)),
+  FlowsToSTOREOfConstruct(writtenVar, construct),
+  !VarFlowsFromLOADToSTORE(writtenVar, construct).
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "VAR", checkedVar, 0, 0):-
+  RevertEnforcesEnum(checkedVar, _, _),
+  (OR(_, checkedVar, fromVar, toVar) ; OR(_, fromVar, checkedVar, toVar)),
+  FlowsToSTOREOfConstruct(checkedVar, construct),
+  !VarFlowsFromLOADToSTORE(checkedVar, construct).
+
+// ProbablyPartialStorageUpdatePattern(fromVar, toVar, "VAR", writtenVar, byteLow, byteLow + castedTo - 1):-
+//   HighBytesCastedAndRightShiftedVar(writtenVar, castedNShifted, byteLow, castedTo),
+//   (OR(_, castedNShifted, fromVar, toVar) ; OR(_, fromVar, castedNShifted, toVar)).
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "CONST", baseVal, shiftBytes, shiftBytes + byteLen - 1):-
+  BasicVariable_Value(writtenVar, writtenVal),
+  byteLen = (strlen(baseVal) - 2 + 1)/2,
+  ConstantProbablyShifted(writtenVal, baseVal, shiftBytes),
+  (OR(_, writtenVar, fromVar, toVar) ; OR(_, fromVar, writtenVar, toVar)).
+
+ProbablyPartialStorageUpdatePattern(fromVar, toVar, "CONST", writtenVal, 0, byteLen - 1):-
+  BasicVariable_Value(writtenVar, writtenVal),
+  writtenVal != "0x0", // Zero is handled differently
+  !ConstantProbablyShifted(writtenVal, _, _),
+  byteLen = (strlen(writtenVal) - 2 + 1)/2,
+  (OR(_, writtenVar, fromVar, toVar) ; OR(_, fromVar, writtenVar, toVar)).
+
+
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh),
+ProbablyPartialStorageUpdateSequenceKeep(toVar, load, loc, storVar, keepByteLow, keepByteHigh):-
+  VarHoldsBytesOfStorVar(originVar, load, loc, storVar, 0, 31),
+  ByteMaskOpKeepRange(originVar, originMasked, [keepByteLow, keepByteHigh]),
+  ProbablyPartialStorageUpdatePattern(originMasked, toVar, kind, writtenVarOrConst, byteLow, byteHigh).
+
+ProbablyPartialStorageUpdateSequenceWrite(toVar, "CONST", "0x0", byteLow, byteHigh),
+ProbablyPartialStorageUpdateSequenceKeep(toVar, load, loc, storVar, keepByteLow, keepByteHigh):-
+  VarHoldsBytesOfStorVar(originVar, load, loc, storVar, 0, 31),
+  ByteMaskOpKeepRange(originVar, originMasked, [keepByteLow, keepByteHigh]),
+  ByteMaskOpMaskRange(originVar, originMasked, [byteLow, byteHigh]),
+  (OR(_, zeroVar, originMasked, toVar) ; OR(_, originMasked, zeroVar, toVar)),
+  BasicVariable_Value(zeroVar, "0x0").
+
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh):-
+  ProbablyPartialStorageUpdateSequenceWrite(originVar, kind, writtenVarOrConst, byteLow, byteHigh),
+  ProbablyPartialStorageUpdatePattern(originVar, toVar, _, _, _, _). // TODO: Ensure no conflict
+
+// For completeness, maybe useless, doesn't affect our current test set
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh):-
+  ProbablyPartialStorageUpdateSequenceWrite(fromVar, kind, writtenVarOrConst, byteLow, byteHigh),
+  (OR(_, zeroVar, fromVar, toVar) ; OR(_, fromVar, zeroVar, toVar)),
+  BasicVariable_Value(zeroVar, "0x0").
+
+// For completeness, maybe useless, doesn't affect our current test set
+ProbablyPartialStorageUpdateSequenceKeep(toVar, load, loc, storVar, keepByteLow, keepByteHigh):-
+  ProbablyPartialStorageUpdateSequenceKeep(fromVar, load, loc, storVar, keepByteLow, keepByteHigh),
+  (OR(_, zeroVar, fromVar, toVar) ; OR(_, fromVar, zeroVar, toVar)),
+  BasicVariable_Value(zeroVar, "0x0").
+
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh):-
+  ProbablyPartialStorageUpdatePattern(originVar1, toVar, kind, writtenVarOrConst, byteLow, byteHigh),
+  ProbablyPartialStorageUpdatePattern(originVar2, toVar, _,  _, _, _),
+  originVar1 != originVar2,
+  !ProbablyPartialStorageUpdatePattern(_, as(writtenVarOrConst, Variable), _,  _, _, _).
+
+/**
+  Could be more complex (allow for parts of the previous writes to survive).
+*/
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh):-
+  ProbablyPartialStorageUpdateSequenceWrite(originVar, kind, writtenVarOrConst, byteLow, byteHigh),
+  ByteMaskOpKeepRange(originVar, toVar, [keepByteLow, keepByteHigh]),
+  byteLow >= keepByteLow, keepByteLow <= byteHigh, byteHigh <= keepByteHigh.
+
+ProbablyPartialStorageUpdateSequenceWrite(toVar, kind, writtenVarOrConst, byteLow, byteHigh):-
+  ProbablyPartialStorageUpdateSequenceWrite(originVar, _, _, _, _),
+  ProbablyPartialStorageUpdatePattern(originVar, toVar, kind, writtenVarOrConst, byteLow, byteHigh).
+
+ProbablyPartialStorageUpdateSequenceKeep(toVar, load, loc, storVar, keepByteLow, keepByteHigh):-
+  ProbablyPartialStorageUpdateSequenceKeep(originVar, load, loc, storVar, keepByteLow, keepByteHigh),
+  ProbablyPartialStorageUpdatePattern(originVar, toVar, _, _, _, _).
+
+// Propagate `ProbablyPartialStorageUpdateSequenceKeep` through masking operations, accounting for difference between ranges 
+ProbablyPartialStorageUpdateSequenceKeep(toVar, load, loc, storVar, max(keepByteLow, maskKeepByteLow), min(keepByteHigh, maskKeepByteHigh)):-
+  ProbablyPartialStorageUpdateSequenceKeep(originVar, load, loc, storVar, keepByteLow, keepByteHigh),
+  ByteMaskOpKeepRange(originVar, toVar, [maskKeepByteLow, maskKeepByteHigh]),
+  max(keepByteLow, maskKeepByteLow) <= min(keepByteHigh, maskKeepByteHigh).
+
+UselessSLOAD(sload):-
+  ProbablyPartialStorageUpdateSequenceKeep(originVar, sload, _, _, keepByteLow, keepByteHigh),
+  !BytesOfStorVarKept(_, sload, _,  _, _, _),
+  ByteMaskOpKeepRange(originVar, _, [maskKeepByteLow, maskKeepByteHigh]),
+  max(keepByteLow, maskKeepByteLow) > min(keepByteHigh, maskKeepByteHigh).
+
+
+VarWrittenToBytesOfStorVar(as(writtenVar, Variable), store, loc, construct, byteLow, byteHigh):-
+  STOREToConstruct(store, loc, construct, storedVar),
+  ProbablyPartialStorageUpdateSequenceWrite(storedVar, "VAR", writtenVar, byteLow, byteHigh).
+
+ConstWrittenToBytesOfStorVar("0xlala", as(writtenConst, Value), store, "lolo", loc, construct, byteLow, byteHigh):-
+  STOREToConstruct(store, loc, construct, storedVar),
+  ProbablyPartialStorageUpdateSequenceWrite(storedVar, "CONST", writtenConst, byteLow, byteHigh),
+  !ProbablyPartialStorageUpdateSequenceWrite(storedVar, "VAR", _, byteLow, _).  // prefer var inference if they start from the same byte
+
+/**
+  Needs special handling because in via-ir deleted storage structs have all their bytes zeroed out.
+  Before the unused bytes would be kept.
+*/
+.decl DeleteOfStructSlot(store: Statement, loc: StorageLocation, construct: StorageConstruct)
+DEBUG_OUTPUT(DeleteOfStructSlot)
+DeleteOfStructSlot(store, loc, construct):-
+  STOREToConstruct(store, loc, construct, storedVar),
+  Variable_Value(storedVar, "0x0").
+
+.decl BytesOfStorVarKept(store: Statement, load: Statement, loc: StorageLocation, construct: StorageConstruct, keepByteLow: number, keepByteHigh: number)
+
+BytesOfStorVarKept(store, load, loc, construct, keepByteLow, keepByteHigh):-
+  STOREToConstruct(store, loc, construct, storedVar),
+  ProbablyPartialStorageUpdateSequenceKeep(storedVar, load, loc, construct, keepByteLow, keepByteHigh).
+
+.decl UselessSLOAD(sload: Statement)
+DEBUG_OUTPUT(UselessSLOAD)
+
+.decl ByteOfStorVarKeptOrUpdated(store: Statement, loc: StorageLocation, construct: StorageConstruct, byte: number)
+DEBUG_OUTPUT(ByteOfStorVarKeptOrUpdated)
+
+ByteOfStorVarKeptOrUpdated(store, loc, construct, byte):-
+  STOREToConstruct(store, loc, construct, storedVar),
+  (
+    ProbablyPartialStorageUpdateSequenceKeep(storedVar, _, loc, construct, byteLow, byteHigh);
+    ProbablyPartialStorageUpdateSequenceWrite(storedVar, _, _, byteLow, byteHigh)
+  ),
+  byte = range(byteLow, byteHigh + 1, 1).
+
+/**
+  `byte` is not `ByteOfStorVarKeptOrUpdated()` so the value 0x0 is stored to it.
+*/
+.decl SSTOREZeroByte(store: Statement, construct: StorageConstruct, byte: number)
+DEBUG_OUTPUT(SSTOREZeroByte)
+
+/**
+  Bytes from `byteLow` to `byteHigh` are not `ByteOfStorVarKeptOrUpdated()` so the value 0x0 is stored to them.
+*/
+.decl SSTOREZeroRange(store: Statement, construct: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(SSTOREZeroRange)
+
+SSTOREZeroByte(store, construct, byte):-
+  STOREToConstruct(store, loc, construct, _),
+  ByteOfStorVarKeptOrUpdated(store, loc, construct, _),
+  byte = range(0, 32, 1),
+  !ByteOfStorVarKeptOrUpdated(store, loc, construct, byte).
+
+SSTOREZeroRange(store, construct, byteLow, byteHigh):-
+  SSTOREZeroByte(store, construct, byteLow),
+  !SSTOREZeroByte(store, construct, byteLow - 1),
+  SSTOREZeroByte(store, construct, byteHigh),
+  !SSTOREZeroByte(store, construct, byteHigh + 1),
+  byteLow <= byteHigh,
+  1 + byteHigh - byteLow = count : {SSTOREZeroByte(store, construct, k), byteLow <= k, k <= byteHigh}.
+
+ConstWrittenToBytesOfStorVar(MISSING_VAR_PLACEHOLDER, "0x0", store, "lolo", loc, construct, byteLow, byteHigh):-
+  STOREToConstruct(store, loc, construct, _),
+  SSTOREZeroRange(store, construct, byteLow, byteHigh).
+
+
+VarWrittenToBytesOfStorVarIsMergedVar(writtenVar, modeledVar, store, loc, construct, 0, byteHigh):-
+  VarWrittenToBytesOfStorVar(writtenVar, store, loc, construct, 0, byteHigh),
+  Statement_Defines(otherLoad, writtenVar, 0),
+  VarHoldsBytesOfStorVar(modeledVar, otherLoad, _, _, 0, byteHigh),
+  Statement_Uses(store, storedVar, 1),
+  DataFlows(modeledVar, storedVar).
+
+VarWrittenToBytesOfStorVarFinal(modeledVar, store, loc, construct, byteLow, byteHigh):-
+  VarWrittenToBytesOfStorVar(writtenVar, store, loc, construct, byteLow, byteHigh),
+  VarWrittenToBytesOfStorVarIsMergedVar(writtenVar, modeledVar, store, loc, construct, byteLow, byteHigh).
+
+VarWrittenToBytesOfStorVarFinal(writtenVar, store, loc, construct, byteLow, byteHigh):-
+  VarWrittenToBytesOfStorVar(writtenVar, store, loc, construct, byteLow, byteHigh),
+  !VarWrittenToBytesOfStorVarIsMergedVar(writtenVar, _, store, loc, construct, byteLow, byteHigh).
+
+
+BytesOfStorVarKept(store, load, loc, construct, keepByteLow, keepByteHigh),
+ConstWrittenToBytesOfStorVar(MISSING_VAR_PLACEHOLDER, "0x0", store, load, loc, construct, maskByteLow, maskByteHigh):-
+  VarHoldsBytesOfStorVar(originVar, load, loc, construct, 0, 31),
+  ByteMaskOpKeepRange(originVar, storedVar, [keepByteLow, keepByteHigh]),
+  ByteMaskOpMaskRange(originVar, storedVar, [maskByteLow, maskByteHigh]),
+  STOREToConstruct(store, loc, construct, storedVar).
+
+/**
+  byte of storage variable is never read ConstWrittenToByteOfStorVar that write to bytes that are never read
+*/
+.decl ConstWrittenToUnreadByteOfStorVar(const: Value, store: Statement, load: Statement, location: StorageLocation, storVar: StorageConstruct, byteLow: number, writeByte: number)
+DEBUG_OUTPUT(ConstWrittenToUnreadByteOfStorVar)
+
+/**
+  Subset of ConstWrittenToBytesOfStorVar that write to bytes that are never read
+  Will first identify individual bytes and then group them together
+*/
+.decl ConstWrittenToUnreadBytesOfStorVar(const: Value, store: Statement, load: Statement, location: StorageLocation, storVar: StorageConstruct, byteLow: number, byteHigh: number)
+DEBUG_OUTPUT(ConstWrittenToUnreadBytesOfStorVar)
+
+ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, byteLow, writeByte):-
+  ConstWrittenToBytesOfStorVar(_, const, store, load, loc, storVar, byteLow, byteHigh),
+  writeByte = range(byteLow, byteHigh + 1, 1),
+  !ByteOfStorVarReadOfWritten(loc, storVar, writeByte).
+
+ConstWrittenToUnreadBytesOfStorVar(newVal, store, load, loc, storVar, byteLow, byteHigh):-
+  ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, originalByteLow, byteLow),
+  !ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, originalByteLow, byteLow - 1),
+  ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, originalByteLow, byteHigh),
+  !ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, originalByteLow, byteHigh + 1),
+  1 + byteHigh - byteLow = count : {ConstWrittenToUnreadByteOfStorVar(const, store, load, loc, storVar, originalByteLow, k), byteLow <= k, k <= byteHigh},
+  excessRightBytes = byteLow - originalByteLow,
+  Mask_Length(mask, byteHigh - byteLow + 1),
+  ValueIsByteMask(mask),
+  newVal = as(@and_256(@shr_256(@number_to_hex(excessRightBytes*8), const), mask), Value).
+
+
+// Helper
+.decl ByteOfStorVarReadOfWritten(location: StorageLocation, storVar: StorageConstruct, byte: number)
+ByteOfStorVarReadOfWritten(loc, storVar, byte):-
+  (VarHoldsBytesOfStorVarFinal(_, _, loc, storVar, varByteLow, varByteHigh);
+   VarWrittenToBytesOfStorVar(_, _, loc, storVar, varByteLow, varByteHigh)),
+  byte = range(varByteLow, varByteHigh + 1, 1).
+
+/**
+  HACK (?) HACK (?) HACK (?)
+  If the variable that is being stored on the update of a merged storage var
+  is used again, we consider it a fresh "load" of the storage var
+  its' shifts and masks populate VarHoldsBytesOfStorVar
+  This can happen in optimized code, its good to support it.
+**/
+
+VarHoldsBytesOfStorVar(to, store, loc, storVar, bytes, 31):-
+  VarWrittenToBytesOfStorVar(_, store, loc, storVar, _, _),
+  Statement_Uses(store, storedVar, 1),
+  RShiftBytes(storedVar, to, bytes),
+  Statement_Defines(shiftStmt, to, 0),
+  StatementDominates(store, shiftStmt).
+
+VarHoldsBytesOfStorVar(to, store, loc, storVar, 0, maskLen - 1):-
+  VarWrittenToBytesOfStorVar(_, store, loc, storVar, _, _),
+  Statement_Uses(store, storedVar, 1),
+  LowBytesMaskOp(storedVar, to, maskLen),
+  Statement_Defines(castStmt, to, 0),
+  StatementDominates(store, castStmt).
+
+VarHoldsBytesOfStorVar(to, store, loc, storVar, 0, 0):-
+  VarWrittenToBytesOfStorVar(_, store, loc, storVar, _, _),
+  Statement_Uses(store, storedVar, 1),
+  BooleanCast(storedVar, to),
+  Statement_Defines(castStmt, to, 0),
+  StatementDominates(store, castStmt).
+
+
+.decl NormalizeStorageVarByteLimits(location: StorageLocation, storvVar: StorageConstruct, inByteLow: number, inByteHigh: number, actualByteLow: number, actualByteHigh: number)
+DEBUG_OUTPUT(NormalizeStorageVarByteLimits)
+
+NormalizeStorageVarByteLimits(loc, storVar, low, high, low, actualHigh):-
+  AnyLoadStoreStorVarBytes(_, loc, storVar, low, high),
+  actualHigh = max otherHigh :AnyLoadStoreStorVarBytes(_, loc, storVar, low, otherHigh).
+
+
+
+// Processing of storage variables, accounting for tightly packed words
+.decl ProcessedStorageVariable(location: StorageLocation, storageVar: StorageConstruct, storageVarProcessed: StorageConstruct)
+DEBUG_OUTPUT(ProcessedStorageVariable)
+
+/**
+  Construct `storageVar` packs `numberOfVars` (more than one) variables in a single word
+*/
+.decl StorageVariablePacksNVars(location: StorageLocation, storageVar: StorageConstruct, numberOfVars: number)
+DEBUG_OUTPUT(StorageVariablePacksNVars)
+
+
+GlobalVariable(v):-
+  LoadGlobalVariable(_, v, _) ;
+  StoreGlobalVariable(_, v, _).
+
+LoadGlobalVariable(load, SIMPLE_STORAGE_VAR(storVar), loadedVar):-
+  StorageLoad(load, $Variable($Constant(storVar)), loadedVar).
+
+LoadGlobalVariable(load, MERGED_STORAGE_VAR(storVar, low, high), loadedVar):-
+  StorageLoad(load, $TightlyPackedVariable($Constant(storVar), low, high), loadedVar).
+
+StoreGlobalVariable(store, SIMPLE_STORAGE_VAR(storVar), writtenVar):-
+  StorageStore(store, $Variable($Constant(storVar)), $VariableWrite(writtenVar)).
+
+StoreGlobalVariable(store, MERGED_STORAGE_VAR(storVar, low, high), writtenVar):-
+  StorageStore(store, $TightlyPackedVariable($Constant(storVar), low, high), $VariableWrite(writtenVar)).
+
+// MissingVar because we only infer a ConstantWrite when we cannot infer a variable write
+StoreGlobalVariable(store, SIMPLE_STORAGE_VAR(storVar), MISSING_VAR_PLACEHOLDER):-
+  StorageStore(store, $Variable($Constant(storVar)), $ConstantWrite(const)),
+  const = const.
+
+// MissingVar because we only infer a ConstantWrite when we cannot infer a variable write
+StoreGlobalVariable(store, MERGED_STORAGE_VAR(storVar, low, high), MISSING_VAR_PLACEHOLDER):-
+  StorageStore(store, $TightlyPackedVariable($Constant(storVar), low, high), $ConstantWrite(const)),
+  const = const.
+
+LoadGlobalVariable(load, SIMPLE_TSTORAGE_VAR(storVar), loadedVar):-
+  TransientStorageLoad(load, $Variable($Constant(storVar)), loadedVar).
+
+LoadGlobalVariable(load, MERGED_TSTORAGE_VAR(storVar, low, high), loadedVar):-
+  TransientStorageLoad(load, $TightlyPackedVariable($Constant(storVar), low, high), loadedVar).
+
+StoreGlobalVariable(store, SIMPLE_TSTORAGE_VAR(storVar), writtenVar):-
+  TransientStorageStore(store, $Variable($Constant(storVar)), $VariableWrite(writtenVar)).
+
+StoreGlobalVariable(store, MERGED_TSTORAGE_VAR(storVar, low, high), writtenVar):-
+  TransientStorageStore(store, $TightlyPackedVariable($Constant(storVar), low, high), $VariableWrite(writtenVar)).
+
+// MissingVar because we only infer a ConstantWrite when we cannot infer a variable write
+StoreGlobalVariable(store, SIMPLE_TSTORAGE_VAR(storVar), MISSING_VAR_PLACEHOLDER):-
+  TransientStorageStore(store, $Variable($Constant(storVar)), $ConstantWrite(const)),
+  const = const.
+
+// MissingVar because we only infer a ConstantWrite when we cannot infer a variable write
+StoreGlobalVariable(store, MERGED_TSTORAGE_VAR(storVar, low, high), MISSING_VAR_PLACEHOLDER):-
+  TransientStorageStore(store, $TightlyPackedVariable($Constant(storVar), low, high), $ConstantWrite(const)),
+  const = const.
+
+DEBUG_OUTPUT(StorageVariableInfo)
+
+StorageVariableInfo(SIMPLE_STORAGE_VAR(storVar), $Storage(), storVar, 0, 31):-
+  ProcessedStorageVariable($Storage(), construct, construct),
+  construct = $Variable($Constant(storVar)).
+
+StorageVariableInfo(MERGED_STORAGE_VAR(storVar, byteLow, byteHigh), $Storage(), storVar, byteLow, byteHigh):-
+  ProcessedStorageVariable($Storage(), $Variable($Constant(storVar)), $TightlyPackedVariable($Constant(storVar), byteLow, byteHigh)).
+
+StorageVariableInfo(SIMPLE_TSTORAGE_VAR(storVar), $TransientStorage(), storVar, 0, 31):-
+  ProcessedStorageVariable($TransientStorage(), construct, construct),
+  construct = $Variable($Constant(storVar)).
+
+StorageVariableInfo(MERGED_TSTORAGE_VAR(storVar, byteLow, byteHigh), $TransientStorage(), storVar, byteLow, byteHigh):-
+  ProcessedStorageVariable($TransientStorage(), $Variable($Constant(storVar)), $TightlyPackedVariable($Constant(storVar), byteLow, byteHigh)).
+
+ProcessedStorageVariable(loc, storageVar, storageVar):-
+  FailedMergedStorageModeling(loc, storageVar).
+
+ProcessedStorageVariable(loc, construct, construct):-
+  SuccessfulMergedStorageModeling(loc, construct),
+  (
+    // ConstWrittenToBytesOfStorVar(_, _, _, _, construct, 0, 31);
+    VarWrittenToBytesOfStorVarFinal(_, _, loc, construct, 0, 31);
+    VarHoldsBytesOfStorVarFinal(_, _, loc, construct, 0, 31)
+  ).
+
+// Edge case
+// REVIEW: See if we can handle it using the above rule
+ProcessedStorageVariable(loc, construct, construct):-
+  SuccessfulMergedStorageModeling(loc, construct),
+  ConstWrittenToBytesOfStorVar(_, _, _, _, loc, construct, 0, 31),
+  !VarWrittenToBytesOfStorVarFinal(_, _, loc, construct, _, _),
+  !VarHoldsBytesOfStorVarFinal(_, _, loc, construct, _, _).
+
+ProcessedStorageVariable(loc, storageVar, $TightlyPackedVariable(parentCons, actualLow, actualHigh)):-
+  SuccessfulMergedStorageModeling(loc, storageVar),
+  storageVar = $Variable(parentCons),
+  (
+    ConstWrittenToUnreadBytesOfStorVar(_, _, _, loc, storageVar, byteLow, byteHigh);
+    VarWrittenToBytesOfStorVarFinal(_, _, loc, storageVar, byteLow, byteHigh);
+    VarHoldsBytesOfStorVarFinal(_, _, loc, storageVar, byteLow, byteHigh)
+  ),
+  NormalizeStorageVarByteLimits(loc, storageVar, byteLow, byteHigh, actualLow, actualHigh),
+  byteHigh - byteLow != 31,
+  actualHigh - actualLow != 31.
+
+// If an array element is never loaded or stored directly (i.e. it is only copied via loops)
+// We consider it non merged. Maybe this isn't the right aproach, review.
+ProcessedStorageVariable(loc, $Variable($Array(cons)), $Variable($Array(cons))):-
+  StorageStmtToIndexAndConstruct(_, "LENGTH", loc, _, $Array(cons)),
+  !AnyLoadStoreStorVarBytes(_, loc, $Variable($Array(cons)), _, _).
+
+StorageVariablePacksNVars(loc, storageVar, numberOfVars):-
+  ProcessedStorageVariable(loc, storageVar, _),
+  numberOfVars = count : ProcessedStorageVariable(loc, storageVar, _),
+  numberOfVars > 1.
+
+// TODO: Does this need to be fixed for the (cons, cons) case? YES
+ConstWrittenToBytesOfStorVarProcessed(constVar, const, store, load, loc, $Variable(parentCons), byteLow, byteHigh):-
+  ConstWrittenToBytesOfStorVar(constVar, const, store, load, loc, $Variable(parentCons), byteLow, byteHigh),
+  ProcessedStorageVariable(loc, $Variable(parentCons), $TightlyPackedVariable(parentCons, byteLow, byteHigh)).
+
+ConstWrittenToBytesOfStorVarProcessed(constVar, const, store, load, loc, $Variable(parentCons), byteLow, actualByteHigh):-
+  ConstWrittenToBytesOfStorVar(constVar, const, store, load, loc, $Variable(parentCons), byteLow, byteHigh),
+  ProcessedStorageVariable(loc, $Variable(parentCons), $TightlyPackedVariable(parentCons, byteLow, actualByteHigh)),
+  actualByteHigh > byteHigh.
+
+ConstWrittenToBytesOfStorVarProcessed(MISSING_VAR_PLACEHOLDER, as(@and_256(const, mask), Value), store, load, loc, $Variable(parentCons), byteLow, actualByteHigh):-
+  ConstWrittenToBytesOfStorVar(_, const, store, load, loc, $Variable(parentCons), byteLow, byteHigh),
+  ProcessedStorageVariable(loc, $Variable(parentCons), $TightlyPackedVariable(parentCons, byteLow, actualByteHigh)),
+  actualByteHigh < byteHigh,
+  Mask_Length(mask, byteHigh - actualByteHigh),
+  ValueIsByteMask(mask).
+
+ConstWrittenToBytesOfStorVarProcessed(MISSING_VAR_PLACEHOLDER, newVal, store, load, loc, $Variable(parentCons), actualByteLow, actualByteHigh):-
+  ConstWrittenToBytesOfStorVar(_, const, store, load, loc, $Variable(parentCons), writeByteLow, writeByteHigh),
+  ProcessedStorageVariable(loc, $Variable(parentCons), $TightlyPackedVariable(parentCons, actualByteLow, actualByteHigh)),
+  writeByteLow <= actualByteLow,
+  actualByteHigh <= writeByteHigh,
+  excessRightBytes = actualByteLow - writeByteLow,
+  Mask_Length(mask, actualByteHigh - actualByteLow + 1),
+  ValueIsByteMask(mask),
+  newVal = as(@and_256(@shr_256(@number_to_hex(excessRightBytes*8), const), mask), Value).
+
+ConstWrittenToBytesOfStorVarProcessed(MISSING_VAR_PLACEHOLDER, "0x0", store, store, loc, $Variable(parentCons), actualByteLow, actualByteHigh):-
+  DeleteOfStructSlot(store, loc, $Variable(parentCons)),
+  ProcessedStorageVariable(loc, $Variable(parentCons), $TightlyPackedVariable(parentCons, actualByteLow, actualByteHigh)).
+
+/**
+  Basic type inference
+  Hacky for now just to print the correct uintX or address if nessesary.
+**/
+
+.decl StorageVariableType(storVar:symbol, type:symbol)
+
+StorageVariableType(storVar, type):-
+  StorageVariableInfo(storVar, loc, slot, byteLow, byteHigh),
+  widthBytes = 1 + byteHigh - byteLow,
+  !StorageVariable_Type(loc, $TightlyPackedVariable($Constant(slot), byteLow, byteHigh), _),
+  type = cat("uint", to_string(widthBytes * 8)).
+
+StorageVariableType(storVar, type):-
+  StorageVariableInfo(storVar, loc, slot, byteLow, byteHigh),
+  StorageVariable_Type(loc, $TightlyPackedVariable($Constant(slot), byteLow, byteHigh), type).
+
+StorageVariableType(storVar, "uint256"):-
+  StorageVariableInfo(storVar, loc, slot, 0, 31),
+  !StorageVariable_Type(loc, $Variable($Constant(slot)), _).
+
+StorageVariableType(storVar, type):-
+  StorageVariableInfo(storVar, loc, slot, 0, 31),
+  StorageVariable_Type(loc, $Variable($Constant(slot)), type).
+
+/**
+  Temp statements for the source decompiler to hide
+**/
+
+DataStructuresTempStmt(load):-
+  SuccessfulMergedStorageModeling(loc, storVar),
+  VarHoldsBytesOfStorVarFinal(var, load, loc, storVar, _, _),
+  Statement_Defines(stmt, var, 0),
+  // Ensure it's an SLOAD, it can be an SSTORE in some rare cases
+  (Statement_Opcode(load, "SLOAD"); Statement_Opcode(load, "TLOAD")),
+  stmt != load.
