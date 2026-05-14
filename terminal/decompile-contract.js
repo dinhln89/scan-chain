@@ -163,7 +163,8 @@ function analyzeFunctions(tacFile, addressVars, boolVars) {
       }
     }
 
-    result.set(blockAddr, { payable: isPayable, retType });
+    const mutating = block.includes(" SSTORE ");
+    result.set(blockAddr, { payable: isPayable, retType, mutating });
   }
   return result;
 }
@@ -258,23 +259,29 @@ async function buildPseudoSolidity(outDir, address) {
     }
   }
 
-  // Collect và sort theo tên asc, thêm external/payable/returns
-  const pubList = [];
+  // Collect, phân nhóm mutating vs view, sort asc
+  const mutatingList = [];
+  const viewList = [];
+
   for (const [block] of pubFns) {
     if ((blockToName.get(block) || "") === "__function_selector__") continue;
     const name = resolvedNames.get(block);
     if (!name) continue;
-    // Tìm tên TAC (không có params — gigahorse dùng tên gốc)
-    const tacName = blockToName.get(block) || name.split("(")[0];
-    const analysis = fnAnalysis.get(tacName) || fnAnalysis.get(name.split("(")[0]) || {};
+    const analysis = fnAnalysis.get(block) || {};
     const payable = analysis.payable ? " payable" : "";
     const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
-    pubList.push(`external${payable} ${name}${ret}`);
+    const sig = `external${payable} ${name}${ret}`;
+    if (analysis.mutating) mutatingList.push(sig);
+    else viewList.push(sig);
   }
-  pubList.sort((a, b) => a.localeCompare(b));
+  mutatingList.sort((a, b) => a.localeCompare(b));
+  viewList.sort((a, b) => a.localeCompare(b));
 
-  lines.push("// Public interface:");
-  pubList.forEach((sig) => lines.push(`// function ${sig}`));
+  lines.push(`// State-changing (${mutatingList.length}):`);
+  mutatingList.forEach((sig) => lines.push(`// function ${sig}`));
+  lines.push("");
+  lines.push(`// View / no storage write (${viewList.length}):`);
+  viewList.forEach((sig) => lines.push(`// function ${sig}`));
   lines.push("");
 
   // TAC functions
