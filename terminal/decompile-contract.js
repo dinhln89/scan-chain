@@ -76,11 +76,17 @@ function buildTypeMap(tacFile) {
   for (const line of fs.readFileSync(tacFile, "utf8").split("\n")) {
     const m = andRe.exec(line.trim());
     if (!m) continue;
+    const resultVar = m[1];
     const operands = m[2];
     const hasAddrMask = operands.includes(ADDRESS_MASK);
     const hasBoolMask = /\(0x1\)/.test(operands);
     if (!hasAddrMask && !hasBoolMask) continue;
 
+    // Result var của AND là address/bool value
+    if (hasAddrMask) addressVars.add(resultVar);
+    if (hasBoolMask) boolVars.add(resultVar);
+
+    // Operand vars cũng là address/bool (input)
     let vm;
     varRe.lastIndex = 0;
     while ((vm = varRe.exec(operands)) !== null) {
@@ -92,12 +98,74 @@ function buildTypeMap(tacFile) {
   return { addressVars, boolVars };
 }
 
-function inferType(varName, addressVars, boolVars) {
-  // Normalise: strip leading 0x nếu có, lấy base trước V
+function inferType(varName, addressVars, boolVars, tacDefs) {
+  if (addressVars.has(varName)) return "address";
+  if (boolVars.has(varName)) return "bool";
   const base = varName.split("V")[0].replace(/^0x/, "");
-  if (addressVars.has(base) || addressVars.has(varName)) return "address";
-  if (boolVars.has(base) || boolVars.has(varName)) return "bool";
+  if (addressVars.has(base) || addressVars.has("v" + base)) return "address";
+  if (boolVars.has(base) || boolVars.has("v" + base)) return "bool";
+  const defn = tacDefs && (tacDefs.get(varName) || tacDefs.get("v" + base));
+  if (defn) {
+    const [op, operands] = defn;
+    if (op === "ISZERO") return "bool";
+    if (op === "AND") {
+      for (const o of operands) {
+        const vm = o.match(/\(([0-9a-fx]+)\)/i);
+        if (vm) {
+          if (ADDRESS_MASK.includes(vm[1].toLowerCase().replace("0x", ""))) return "address";
+          if (vm[1] === "0x1") return "bool";
+        }
+      }
+    }
+  }
   return "uint256";
+}
+
+// Phân tích TAC: payability và return type cho mỗi public function
+function analyzeFunctions(tacFile, addressVars, boolVars) {
+  const result = new Map(); // funcName -> { payable, retType }
+  if (!fs.existsSync(tacFile)) return result;
+
+  const tac = fs.readFileSync(tacFile, "utf8");
+
+  // Build tac defs map
+  const tacDefs = new Map();
+  for (const line of tac.split("\n")) {
+    const m = line.trim().match(/^\S+: (\S+) = (\w+)\s*(.*)/);
+    if (m) {
+      const [, varName, op, rest] = m;
+      const operands = rest ? rest.split(",").map((s) => s.trim()) : [];
+      tacDefs.set(varName, [op, operands]);
+    }
+  }
+
+  // Split theo functions
+  const fnBlocks = tac.split(/^(?=function )/m);
+  for (const block of fnBlocks) {
+    if (!block.startsWith("function ")) continue;
+
+    // Lấy block address từ "Begin block 0xXXX" đầu tiên — dùng làm key
+    const blockAddrMatch = block.match(/Begin block (0x[0-9a-f]+)/);
+    if (!blockAddrMatch) continue;
+    const blockAddr = blockAddrMatch[1];
+
+    // Payable: không có CALLVALUE → ISZERO pattern
+    const isPayable = !(/= CALLVALUE\s*\n\s*\S+: \S+ = ISZERO/.test(block));
+
+    // Return type: trace MSTORE values gần RETURN
+    let retType = null;
+    if (/\bRETURN\b/.test(block)) {
+      const mstores = [...block.matchAll(/MSTORE (\S+),\s*(v\S+)/g)];
+      if (mstores.length > 0) {
+        const storedVar = mstores[mstores.length - 1][2];
+        const t = inferType(storedVar, addressVars, boolVars, tacDefs);
+        retType = t;
+      }
+    }
+
+    result.set(blockAddr, { payable: isPayable, retType });
+  }
+  return result;
 }
 
 // Parse contract.tac thành map: functionEntry -> { signature, blocks: string }
@@ -159,6 +227,7 @@ async function buildPseudoSolidity(outDir, address) {
 
   // Build type map from TAC
   const { addressVars, boolVars } = buildTypeMap(tacFile);
+  const fnAnalysis = analyzeFunctions(tacFile, addressVars, boolVars);
 
   // pubFns: [block, selector] — tất cả public functions từ gigahorse
   // Lookup 4byte cho các selector chưa resolve
@@ -189,17 +258,23 @@ async function buildPseudoSolidity(outDir, address) {
     }
   }
 
-  // Collect và sort theo tên asc
+  // Collect và sort theo tên asc, thêm external/payable/returns
   const pubList = [];
   for (const [block] of pubFns) {
     if ((blockToName.get(block) || "") === "__function_selector__") continue;
     const name = resolvedNames.get(block);
-    if (name) pubList.push(name);
+    if (!name) continue;
+    // Tìm tên TAC (không có params — gigahorse dùng tên gốc)
+    const tacName = blockToName.get(block) || name.split("(")[0];
+    const analysis = fnAnalysis.get(tacName) || fnAnalysis.get(name.split("(")[0]) || {};
+    const payable = analysis.payable ? " payable" : "";
+    const ret = analysis.retType ? ` returns (${analysis.retType})` : "";
+    pubList.push(`external${payable} ${name}${ret}`);
   }
   pubList.sort((a, b) => a.localeCompare(b));
 
   lines.push("// Public interface:");
-  pubList.forEach((name) => lines.push(`// function ${name}`));
+  pubList.forEach((sig) => lines.push(`// function ${sig}`));
   lines.push("");
 
   // TAC functions
