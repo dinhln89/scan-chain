@@ -593,13 +593,22 @@ async function decompileContract(address) {
   const cacheOutDir = path.join(GIGAHORSE_CACHE_DIR, name, "out");
   const cachedTac = path.join(cacheOutDir, "contract.tac");
 
+  const CACHED_FILES = [
+    "contract.tac",
+    "HighLevelFunctionName.csv",
+    "PublicFunction.csv",
+    "PublicFunctionArg.csv",
+    "CallToSignature.csv",
+    "EventSignatureInContract.csv",
+  ];
+
   // Dùng cache nếu đã có
   if (fs.existsSync(cachedTac)) {
     console.log("Dùng gigahorse cache.");
-    // Symlink/copy cache vào outDir để buildPseudoSolidity đọc
-    fs.mkdirSync(path.dirname(outDir), { recursive: true });
-    if (!fs.existsSync(outDir)) {
-      fs.cpSync(cacheOutDir, outDir, { recursive: true });
+    fs.mkdirSync(outDir, { recursive: true });
+    for (const f of CACHED_FILES) {
+      const src = path.join(cacheOutDir, f);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(outDir, f));
     }
   } else if (!fs.existsSync(tacFile)) {
     process.stdout.write("Fetching bytecode... ");
@@ -654,9 +663,12 @@ async function decompileContract(address) {
       return;
     }
 
-    // Lưu vào persistent cache
-    fs.mkdirSync(path.dirname(cacheOutDir), { recursive: true });
-    fs.cpSync(outDir, cacheOutDir, { recursive: true });
+    // Lưu vào persistent cache — chỉ các files cần thiết
+    fs.mkdirSync(cacheOutDir, { recursive: true });
+    for (const f of CACHED_FILES) {
+      const src = path.join(outDir, f);
+      if (fs.existsSync(src)) fs.copyFileSync(src, path.join(cacheOutDir, f));
+    }
   }
 
   // Build và lưu pseudo-Solidity
