@@ -9,14 +9,6 @@
             "cron_restart": "*/40 * * * *"
         },
         {
-            "name": "listen-eth",
-            "script": "./pull.sh && node run/listen-chain.js --type=eth --verbose",
-            "instances": 1,
-            "autorestart": true,
-            "max_memory_restart": "4G",
-            "cron_restart": "*/40 * * * *"
-        },
-        {
             "name": "trace-tx",
             "script": "./pull.sh && node run/trace-tx.js",
             "instances": 1,
