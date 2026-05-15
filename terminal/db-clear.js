@@ -4,6 +4,7 @@ require("dotenv").config({
 
 const sequelize = require("../db");
 require("../models/Contract");
+require("../models/ContractDecompile");
 require("../models/IgnoreAddress");
 require("../models/Setting");
 require("../models/Token");
@@ -30,7 +31,7 @@ async function main() {
 
   await sequelize.sync();
 
-  const tables = ["transactions", "contracts", "ignore_addresses", "settings", "tokens", "users"];
+  const tables = ["transactions", "contracts", "contract_decompiles", "ignore_addresses", "settings", "tokens", "users"];
 
   for (const table of tables) {
     try {
@@ -39,6 +40,14 @@ async function main() {
     } catch (err) {
       console.log(`Bo qua ${table}: ${err.message}`);
     }
+  }
+
+  // ALTER trên bảng rỗng chạy ngay lập tức
+  try {
+    await sequelize.query("ALTER TABLE `transactions` MODIFY COLUMN `type` VARCHAR(20) NOT NULL DEFAULT 'bsc'");
+    console.log("Doi kieu cot type thanh VARCHAR xong");
+  } catch (err) {
+    console.log(`Bo qua alter type: ${err.message}`);
   }
 
   await sequelize.sync({ force: false, alter: true });
