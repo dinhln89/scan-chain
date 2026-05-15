@@ -1,16 +1,8 @@
 {
     "apps": [
         {
-            "name": "listen-bsc",
+            "name": "listen-chain",
             "script": "./pull.sh && node run/listen-chain.js",
-            "instances": 1,
-            "autorestart": true,
-            "max_memory_restart": "4G",
-            "cron_restart": "*/40 * * * *"
-        },
-        {
-            "name": "listen-eth",
-            "script": "./pull.sh && node run/listen-chain.js --type=eth",
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "4G",

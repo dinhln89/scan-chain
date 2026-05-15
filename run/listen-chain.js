@@ -6,11 +6,9 @@ const Contract = require("../models/Contract");
 const IgnoreAddress = require("../core/ignore-address");
 const IgnoreMethod = require("../core/ignore-method");
 const { hasV3PathInInput, hasSignatureInInput, syncIgnoreSwap } = require("../core/trace");
-const { sendMessage } = require("../core/telegram");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-const CHAIN_TYPE = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
 const VERBOSE = process.argv.includes("--verbose");
 
 const log = createLogger(__filename, { console: VERBOSE });
@@ -30,10 +28,6 @@ const CHAIN_CONFIGS = {
   },
 };
 
-const CHAIN = CHAIN_CONFIGS[CHAIN_TYPE] || CHAIN_CONFIGS.bsc;
-
-const web3 = new Web3(CHAIN.rpc);
-
 let blockedSet = new Set();
 let blockedSetLoadedAt = 0;
 const BLOCKED_SET_TTL = 60_000;
@@ -50,12 +44,14 @@ async function getBlockedSet() {
   return blockedSet;
 }
 
-const stats = { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
+function makeStats() {
+  return { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
+}
 
-function flushStats() {
+function flushStats(stats, label) {
   const now = Date.now();
   if (now - stats.lastLog >= 5000 && stats.blocks > 0) {
-    log.info(`Block ${stats.fromBlock}-${stats.toBlock} | ${stats.filtered}/${stats.total} tx saved`);
+    log.info(`[${label}] Block ${stats.fromBlock}-${stats.toBlock} | ${stats.filtered}/${stats.total} tx saved`);
     stats.blocks = 0;
     stats.filtered = 0;
     stats.total = 0;
@@ -65,24 +61,22 @@ function flushStats() {
   }
 }
 
-// tra ve true neu co block moi duoc xu ly
-async function processBlock() {
+async function processBlock(chainKey, chain, web3, stats) {
   let chainBlock;
   try {
     chainBlock = await web3.eth.getBlockNumber();
   } catch (err) {
-    throw new Error(`[getBlockNumber] ${err.message}`);
+    throw new Error(`[${chain.label}][getBlockNumber] ${err.message}`);
   }
 
-  const stored = await Setting.get(CHAIN.settingKey);
+  const stored = await Setting.get(chain.settingKey);
   if (!stored) {
-    await Setting.set(CHAIN.settingKey, chainBlock.toString());
-    log.info(`Chua co ${CHAIN.settingKey}, luu block moi nhat: ${chainBlock}`);
+    await Setting.set(chain.settingKey, chainBlock.toString());
+    log.info(`[${chain.label}] Chua co ${chain.settingKey}, luu block moi nhat: ${chainBlock}`);
     return false;
   }
 
   const savedBlock = BigInt(stored);
-
   if (savedBlock >= chainBlock) return false;
 
   const nextBlock = savedBlock + 1n;
@@ -90,15 +84,14 @@ async function processBlock() {
   try {
     block = await web3.eth.getBlock(nextBlock, true);
   } catch (err) {
-    throw new Error(`[getBlock #${nextBlock}] ${err.message}`);
+    throw new Error(`[${chain.label}][getBlock #${nextBlock}] ${err.message}`);
   }
   const txHashes = block.transactions;
   const withInput = txHashes.filter((tx) => tx.input && tx.input !== "0x");
 
   const ignoredSet = IgnoreAddress.getAll();
   const ignoredMethods = IgnoreMethod.getAll();
-
-  const blockedSet = await getBlockedSet();
+  const blocked = await getBlockedSet();
 
   const filtered = withInput.filter((tx) => {
     const from = tx.from?.toLowerCase();
@@ -109,7 +102,7 @@ async function processBlock() {
       !ignoredSet.has(from) &&
       !ignoredSet.has(to) &&
       !ignoredMethods.has(selector) &&
-      !blockedSet.has(to) &&
+      !blocked.has(to) &&
       !hasV3PathInInput(tx.input) &&
       !hasSignatureInInput(tx.input)
     );
@@ -120,7 +113,7 @@ async function processBlock() {
   stats.filtered += filtered.length;
   if (stats.fromBlock === null) stats.fromBlock = nextBlock.toString();
   stats.toBlock = nextBlock.toString();
-  flushStats();
+  flushStats(stats, chain.label);
 
   for (const tx of filtered) {
     if (tx.input.length > 5000) continue;
@@ -128,12 +121,10 @@ async function processBlock() {
     const selector = tx.input?.slice(0, 10)?.toLowerCase() || null;
     if (selector && tx.to) {
       const exists = await Transaction.findOne({
-        where: { selector, to: tx.to.toLowerCase() },
+        where: { selector, to: tx.to.toLowerCase(), type: chainKey },
         attributes: ["id"],
       });
-      if (exists) {
-        continue;
-      }
+      if (exists) continue;
     }
     await Transaction.upsert({
       hash: tx.hash,
@@ -144,20 +135,41 @@ async function processBlock() {
       value: tx.value.toString(),
       input: tx.input,
       selector,
-      type: CHAIN_TYPE,
+      type: chainKey,
     });
     if (tx.to) {
       const addr = tx.to.toLowerCase();
       const [contract] = await Contract.findOrCreate({
         where: { address: addr },
-        defaults: { txCount: 0, url: CHAIN.explorerUrl(addr) },
+        defaults: { txCount: 0, url: chain.explorerUrl(addr) },
       });
       await contract.increment("txCount");
     }
   }
 
-  await Setting.set(CHAIN.settingKey, nextBlock.toString());
+  await Setting.set(chain.settingKey, nextBlock.toString());
   return true;
+}
+
+function startChainLoop(chainKey, chain) {
+  const web3 = new Web3(chain.rpc);
+  const stats = makeStats();
+
+  const loop = async () => {
+    let delay = 500;
+    try {
+      const hadBlock = await processBlock(chainKey, chain, web3, stats);
+      delay = hadBlock ? 500 : 2000;
+    } catch (err) {
+      log.error(`[${chain.label}] Loi: ${err.message}`);
+      if (err.stack) log.error(err.stack);
+      delay = 2000;
+    }
+    setTimeout(loop, delay);
+  };
+
+  log.info(`Bat dau lang nghe ${chain.label}...`);
+  loop();
 }
 
 async function main() {
@@ -166,22 +178,10 @@ async function main() {
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
   syncIgnoreSwap();
-  log.info(`Bat dau lang nghe ${CHAIN.label}...`);
 
-  const loop = async () => {
-    let delay = 500;
-    try {
-      const hadBlock = await processBlock();
-      delay = hadBlock ? 500 : 2000;
-    } catch (err) {
-      log.error(`Loi: ${err.message}`);
-      if (err.stack) log.error(err.stack);
-      delay = 2000;
-    }
-    setTimeout(loop, delay);
-  };
-
-  loop();
+  for (const [chainKey, chain] of Object.entries(CHAIN_CONFIGS)) {
+    startChainLoop(chainKey, chain);
+  }
 }
 
 main().catch((err) => log.error(err.message));
