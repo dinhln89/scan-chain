@@ -73,9 +73,32 @@ async function main() {
   }
 
   const { DataTypes } = require('sequelize');
+
+  const txColumns = await qi.describeTable('transactions').catch(() => null);
+  if (txColumns && !txColumns.transactionIndex) {
+    done = withTimer('[5/7] Thêm cột transactionIndex vào transactions...');
+    await qi.addColumn('transactions', 'transactionIndex', {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      after: 'blockNumber',
+    });
+    done();
+  } else {
+    process.stdout.write('[5/7] Cột transactionIndex đã tồn tại, bỏ qua\n');
+    log.info('Cot transactionIndex da ton tai, bo qua');
+  }
+
+  if (txColumns && txColumns.type) {
+    done = withTimer('[6/7] Cập nhật ENUM type transactions (ethereum → eth)...');
+    await sequelize.query(`ALTER TABLE transactions MODIFY COLUMN \`type\` ENUM('bsc', 'eth') NOT NULL DEFAULT 'bsc'`);
+    done();
+  } else {
+    process.stdout.write('[6/7] Bỏ qua cập nhật ENUM type\n');
+  }
+
   const decompileColumns = await qi.describeTable('contract_decompiles').catch(() => null);
   if (decompileColumns && !decompileColumns.chain) {
-    done = withTimer('[5/6] Thêm cột chain vào contract_decompiles...');
+    done = withTimer('[7/7] Thêm cột chain vào contract_decompiles...');
     await qi.addColumn('contract_decompiles', 'chain', {
       type: DataTypes.STRING(10),
       allowNull: false,
@@ -84,11 +107,11 @@ async function main() {
     });
     done();
   } else {
-    process.stdout.write('[5/6] Cột chain đã tồn tại, bỏ qua\n');
+    process.stdout.write('[7/7] Cột chain đã tồn tại, bỏ qua\n');
     log.info('Cot chain da ton tai, bo qua');
   }
 
-  process.stdout.write('[6/6] Hoàn tất!\n');
+  process.stdout.write('Hoàn tất!\n');
   log.info('Hoan tat');
   process.exit(0);
 }

@@ -42,7 +42,7 @@ const Transaction = sequelize.define(
       allowNull: true,
     },
     type: {
-      type: DataTypes.ENUM("bsc", "ethereum"),
+      type: DataTypes.ENUM("bsc", "eth"),
       allowNull: false,
       defaultValue: "bsc",
     },
