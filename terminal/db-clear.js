@@ -47,38 +47,21 @@ async function main() {
     return;
   }
 
+  const dbName = process.env.DB_NAME;
   let done;
 
-  done = withTimer("Ket noi database...");
+  done = withTimer("Ket noi...");
   await sequelize.ensureDatabase();
   done();
 
-  const tables = ["transactions", "contracts", "contract_decompiles", "four_byte_selectors", "ignore_addresses", "settings", "tokens", "users"];
-
   console.log("");
-  for (const table of tables) {
-    const count = await getRowCount(table);
-    if (count === null) {
-      console.log(`  ✗ ${table}: khong ton tai, bo qua`);
-      continue;
-    }
-    done = withTimer(`TRUNCATE ${table}`);
-    try {
-      await sequelize.query(`TRUNCATE TABLE \`${table}\``);
-      done(`${count.toLocaleString()} rows xoa`);
-    } catch (err) {
-      done(`loi: ${err.message}`);
-    }
-  }
+  done = withTimer(`DROP DATABASE \`${dbName}\`...`);
+  await sequelize.query(`DROP DATABASE \`${dbName}\``);
+  done();
 
-  console.log("");
-  done = withTimer("ALTER transactions.type → VARCHAR(20)");
-  try {
-    await sequelize.query("ALTER TABLE `transactions` MODIFY COLUMN `type` VARCHAR(20) NOT NULL DEFAULT 'bsc'");
-    done();
-  } catch (err) {
-    done(`loi: ${err.message}`);
-  }
+  done = withTimer(`CREATE DATABASE \`${dbName}\`...`);
+  await sequelize.query(`CREATE DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  done();
 
   await sequelize.close();
   console.log("\nDone.");
