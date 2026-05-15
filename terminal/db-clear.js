@@ -3,13 +3,6 @@ require("dotenv").config({
 });
 
 const sequelize = require("../db");
-require("../models/Contract");
-require("../models/ContractDecompile");
-require("../models/IgnoreAddress");
-require("../models/Setting");
-require("../models/Token");
-require("../models/Transaction");
-require("../models/User");
 
 async function confirm(question) {
   process.stdout.write(question);
@@ -29,7 +22,7 @@ async function main() {
     return;
   }
 
-  await sequelize.sync();
+  await sequelize.ensureDatabase();
 
   const tables = ["transactions", "contracts", "contract_decompiles", "ignore_addresses", "settings", "tokens", "users"];
 
@@ -42,16 +35,13 @@ async function main() {
     }
   }
 
-  // ALTER trên bảng rỗng chạy ngay lập tức
+  // ALTER tren bang rong chay ngay lap tuc
   try {
     await sequelize.query("ALTER TABLE `transactions` MODIFY COLUMN `type` VARCHAR(20) NOT NULL DEFAULT 'bsc'");
     console.log("Doi kieu cot type thanh VARCHAR xong");
   } catch (err) {
     console.log(`Bo qua alter type: ${err.message}`);
   }
-
-  await sequelize.sync({ force: false, alter: true });
-  console.log("Recreate indexes xong");
 
   await sequelize.close();
   console.log("Done.");
