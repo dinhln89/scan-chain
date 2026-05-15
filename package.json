@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "logs": "tail -f logs/listen-chain.log logs/trace-tx.log logs/error.log"
+    "logs": "tail -f logs/listen-chain.log logs/trace-tx.log logs/error.log | awk 'BEGIN{name=\"\"} /^==>/{ n=split($0,a,\"/\"); split(a[n],b,\".\"); name=b[1]; next } NF{ sub(/^[^ ]+ [^ ]+ /,\"\"); lv=tolower(substr($1,2,length($1)-2)); sub(/^\\[[A-Z]+\\] /,\"\"); printf \"%-14s| %s: %s\\n\", name, lv, $0 }'"
   },
   "repository": {
     "type": "git",
