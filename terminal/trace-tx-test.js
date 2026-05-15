@@ -69,8 +69,9 @@ async function main() {
   }
 
   console.log("  isTransferSender   :", result.isTransferSender);
-  console.log("  isTransferFromErc20:", result.isTransferFromErc20);
-  console.log("  isEcrecoverSender  :", result.isEcrecoverSender);
+  console.log("  isTransferFromErc20    :", result.isTransferFromErc20);
+  console.log("  isTransferFromExclSender:", result.isTransferFromErc20ExclSender);
+  console.log("  isEcrecoverSender      :", result.isEcrecoverSender);
   console.log("  selector           :", result.selector ?? "");
   console.log("  symbol             :", result.symbol || "(none)");
   console.log("  inputCallAddrs     :", result.inputCallAddrs || "(none)");
@@ -137,7 +138,7 @@ async function main() {
     console.log(" ", buildRow(tx, result, { chain }));
   }
 
-  if (result.isTransferFromErc20 && result.isEcrecoverSender) {
+  if (result.isTransferFromErc20ExclSender && result.isEcrecoverSender) {
     const scanBase = chain === "ETH" ? "etherscan.io" : "bscscan.com";
     console.log("[TransferFromSheet row]");
     console.log(" ", [

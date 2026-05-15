@@ -481,16 +481,23 @@ async function analyzeTx(txHash, txData = null) {
 
   // Mảng A: input addresses + sender
   const addersExcludeFromSet = new Set([...addersExcludeFrom, sender]);
-  // Mảng B: transferFrom calls có from trong mảng A, loại sender, amount > 0
-  const isTransferFromErc20 = calls.some((c) => {
-    const input = c.input?.toLowerCase();
-    if (!input || input.length < 202) return false;
-    if (!input.startsWith("0x23b872dd")) return false;
-    const fromAddr = "0x" + input.slice(34, 74);
-    if (fromAddr === sender) return false;
-    if (!addersExcludeFromSet.has(fromAddr)) return false;
-    return BigInt("0x" + input.slice(138, 202)) > 0n;
-  });
+
+  function checkTransferFrom(excludeSender) {
+    return calls.some((c) => {
+      const input = c.input?.toLowerCase();
+      if (!input || input.length < 202) return false;
+      if (!input.startsWith("0x23b872dd")) return false;
+      const fromAddr = "0x" + input.slice(34, 74);
+      if (excludeSender && fromAddr === sender) return false;
+      if (!addersExcludeFromSet.has(fromAddr)) return false;
+      return BigInt("0x" + input.slice(138, 202)) > 0n;
+    });
+  }
+
+  // Sheet4: from trong mảng A (bao gồm sender), amount > 0
+  const isTransferFromErc20 = checkTransferFrom(false);
+  // TransferFromSheet: loại sender khỏi from
+  const isTransferFromErc20ExclSender = checkTransferFrom(true);
 
   // C: ecrecover precompile call trả về địa chỉ trùng sender
   const isEcrecoverSender = hasEcrecoverForSender(trace, sender);
@@ -502,6 +509,7 @@ async function analyzeTx(txHash, txData = null) {
     hasSignature: hasSignatureInInput(tx.input),
     isEcrecoverSender,
     isTransferFromErc20,
+    isTransferFromErc20ExclSender,
     isTransferSender,
     selector,
     transactionIndex: receipt.transactionIndex,

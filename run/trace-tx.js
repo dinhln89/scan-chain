@@ -43,8 +43,8 @@ async function processTx(tx) {
     await append([buildRow(tx, result, { chain })], { sheet: "Sheet1" });
   }
 
-  // TransferFromSheet: B.length > 0 và C == true (ecrecover trả về sender)
-  if (result.isTransferFromErc20 && result.isEcrecoverSender) {
+  // TransferFromSheet: B (loại sender) và C == true (ecrecover trả về sender)
+  if (result.isTransferFromErc20ExclSender && result.isEcrecoverSender) {
     await append(
       [
         [
