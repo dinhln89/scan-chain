@@ -117,7 +117,7 @@ async function processOne(tx) {
   }
 }
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 5;
 // inFlight: set tx.id đang xử lý — loại khỏi DB query để tránh fetch trùng
 const inFlight = new Set();
 
@@ -132,8 +132,8 @@ async function scheduleBatch() {
   const txs = await Transaction.findAll({
     where,
     order: [
-      ["blockNumber", "ASC"],
-      ["id", "ASC"],
+      ["blockNumber", "DESC"],
+      ["id", "DESC"],
     ],
     limit: slots,
   });

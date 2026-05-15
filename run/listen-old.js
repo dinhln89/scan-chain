@@ -10,16 +10,28 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 const log = createLogger(__filename);
 
-// Setting key riêng để không xung đột với listen-chain
 const OLD_BLOCK_KEY = (chainKey) => `old_block_${chainKey}`;
+const BATCH_SIZE = 5;
 
-async function processBlock(chainKey, chain, web3, stats) {
+async function fetchAndSave(chainKey, chain, web3, blockNumber) {
+  let block;
+  try {
+    block = await web3.eth.getBlock(blockNumber, true);
+  } catch (err) {
+    throw new Error(`[getBlock #${blockNumber}] ${err.message}`);
+  }
+  if (!block) return { total: 0, saved: 0 };
+  const filtered = filterTxs(block.transactions);
+  const saved = await saveTxs(chainKey, chain, blockNumber, filtered);
+  return { total: block.transactions.length, saved };
+}
+
+async function processBatch(chainKey, chain, web3, stats) {
   const settingKey = OLD_BLOCK_KEY(chainKey);
 
   let target;
   const stored = await Setting.get(settingKey);
   if (!stored) {
-    // Lần đầu: lấy block hiện tại và lưu làm điểm xuất phát
     const current = await web3.eth.getBlockNumber();
     await Setting.set(settingKey, current.toString());
     log.info(`[${chain.label}] Khoi tao old_block tai #${current}`);
@@ -33,29 +45,32 @@ async function processBlock(chainKey, chain, web3, stats) {
     return false;
   }
 
-  log.info(`[${chain.label}] Old block #${target}`);
-
-  let block;
-  try {
-    block = await web3.eth.getBlock(target, true);
-  } catch (err) {
-    throw new Error(`[${chain.label}][getBlock #${target}] ${err.message}`);
+  // Xử lý BATCH_SIZE blocks song song
+  const blockNumbers = [];
+  for (let i = 0n; i < BigInt(BATCH_SIZE) && target - i > 0n; i++) {
+    blockNumbers.push(target - i);
   }
 
-  if (block) {
-    const filtered = filterTxs(block.transactions);
-    const saved = await saveTxs(chainKey, chain, target, filtered);
+  const results = await Promise.allSettled(
+    blockNumbers.map((b) => fetchAndSave(chainKey, chain, web3, b))
+  );
 
-    stats.blocks++;
-    stats.total += block.transactions.length;
-    stats.filtered += saved;
-    if (stats.fromBlock === null) stats.fromBlock = target.toString();
-    stats.toBlock = target.toString();
-    flushStats(stats, chain.label, log);
+  for (const r of results) {
+    if (r.status === "fulfilled") {
+      stats.blocks++;
+      stats.total += r.value.total;
+      stats.filtered += r.value.saved;
+    } else {
+      log.error(`[${chain.label}] ${r.reason?.message}`);
+    }
   }
 
-  // Lần sau scan block trước đó
-  await Setting.set(settingKey, (target - 1n).toString());
+  const newTarget = target - BigInt(blockNumbers.length);
+  if (stats.fromBlock === null) stats.fromBlock = target.toString();
+  stats.toBlock = newTarget.toString();
+  flushStats(stats, chain.label, log);
+
+  await Setting.set(settingKey, newTarget.toString());
   return true;
 }
 
@@ -64,19 +79,18 @@ function startChainLoop(chainKey, chain) {
   const stats = makeStats();
 
   const loop = async () => {
-    let delay = 200;
+    let delay = 0;
     try {
-      const hadBlock = await processBlock(chainKey, chain, web3, stats);
-      if (!hadBlock) return; // dừng khi đã scan hết
+      const hasMore = await processBatch(chainKey, chain, web3, stats);
+      if (!hasMore) return;
     } catch (err) {
       log.error(`[${chain.label}] Loi: ${err.message}`);
-      if (err.stack) log.error(err.stack);
       delay = 2000;
     }
     setTimeout(loop, delay);
   };
 
-  log.info(`[${chain.label}] Bat dau crawl old blocks...`);
+  log.info(`[${chain.label}] Bat dau crawl old blocks (batch=${BATCH_SIZE})...`);
   loop();
 }
 
