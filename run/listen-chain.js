@@ -10,7 +10,29 @@ const { sendMessage } = require("../core/telegram");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-const log = createLogger(__filename);
+const CHAIN_TYPE = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
+const VERBOSE = process.argv.includes("--verbose");
+
+const log = createLogger(__filename, { console: VERBOSE });
+
+const CHAIN_CONFIGS = {
+  bsc: {
+    rpc: process.env.BSC_RPC || "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2",
+    settingKey: "latest_block_bsc",
+    explorerUrl: (addr) => `https://bscscan.com/address/${addr}`,
+    label: "BSC",
+  },
+  eth: {
+    rpc: process.env.ETH_RPC || "https://eth-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2",
+    settingKey: "latest_block_eth",
+    explorerUrl: (addr) => `https://etherscan.io/address/${addr}`,
+    label: "ETH",
+  },
+};
+
+const CHAIN = CHAIN_CONFIGS[CHAIN_TYPE] || CHAIN_CONFIGS.bsc;
+
+const web3 = new Web3(CHAIN.rpc);
 
 let blockedSet = new Set();
 let blockedSetLoadedAt = 0;
@@ -27,12 +49,6 @@ async function getBlockedSet() {
   blockedSetLoadedAt = now;
   return blockedSet;
 }
-
-const BSC_RPC =
-  process.env.BSC_RPC ||
-  "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
-
-const web3 = new Web3(BSC_RPC);
 
 const stats = { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
 
@@ -58,10 +74,10 @@ async function processBlock() {
     throw new Error(`[getBlockNumber] ${err.message}`);
   }
 
-  const stored = await Setting.get("latest_block");
+  const stored = await Setting.get(CHAIN.settingKey);
   if (!stored) {
-    await Setting.set("latest_block", chainBlock.toString());
-    log.info(`Chua co latest_block, luu block moi nhat: ${chainBlock}`);
+    await Setting.set(CHAIN.settingKey, chainBlock.toString());
+    log.info(`Chua co ${CHAIN.settingKey}, luu block moi nhat: ${chainBlock}`);
     return false;
   }
 
@@ -128,19 +144,19 @@ async function processBlock() {
       value: tx.value.toString(),
       input: tx.input,
       selector,
-      type: "bsc",
+      type: CHAIN_TYPE,
     });
     if (tx.to) {
       const addr = tx.to.toLowerCase();
       const [contract] = await Contract.findOrCreate({
         where: { address: addr },
-        defaults: { txCount: 0, url: `https://bscscan.com/address/${addr}` },
+        defaults: { txCount: 0, url: CHAIN.explorerUrl(addr) },
       });
       await contract.increment("txCount");
     }
   }
 
-  await Setting.set("latest_block", nextBlock.toString());
+  await Setting.set(CHAIN.settingKey, nextBlock.toString());
   return true;
 }
 
@@ -150,14 +166,12 @@ async function main() {
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
   syncIgnoreSwap();
-  log.info("Bat dau lang nghe BSC...");
+  log.info(`Bat dau lang nghe ${CHAIN.label}...`);
 
   const loop = async () => {
     let delay = 500;
     try {
       const hadBlock = await processBlock();
-      // co block moi: check ngay sau 100ms de bat kip block tiep theo
-      // khong co gi: BSC ~3s/block, doi 500ms de tranh spam getBlockNumber
       delay = hadBlock ? 500 : 2000;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
