@@ -117,13 +117,13 @@ async function processOne(tx) {
   }
 }
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 3;
 // inFlight: set tx.id đang xử lý — loại khỏi DB query để tránh fetch trùng
 const inFlight = new Set();
 
 async function scheduleBatch() {
   const slots = CONCURRENCY - inFlight.size;
-  if (slots <= 0) return;
+  if (slots <= 0) return 0;
 
   const where = { processed: false };
   // Loại các tx đang xử lý dở khỏi query
@@ -143,6 +143,8 @@ async function scheduleBatch() {
     // Không await — fire & forget, inFlight được dọn khi xong hoặc lỗi
     processOne(tx).finally(() => inFlight.delete(tx.id));
   }
+
+  return txs.length;
 }
 
 async function main() {
@@ -153,12 +155,14 @@ async function main() {
   log.info("Bat dau xu ly transactions...");
 
   const loop = async () => {
+    let delay = 500;
     try {
-      await scheduleBatch();
+      const found = await scheduleBatch();
+      delay = found > 0 ? 200 : 1000;
     } catch (err) {
       log.error(`Loi: ${err.message}`);
     }
-    setTimeout(loop, 50);
+    setTimeout(loop, delay);
   };
 
   loop();

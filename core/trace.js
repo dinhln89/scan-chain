@@ -136,9 +136,9 @@ function extractCalls(calls = [], results = [], parentSelector = null) {
         parentSelector,
       });
     }
-    // if (selector && !ignoreSwap.has(selector)) {
-    if (call.calls) extractCalls(call.calls, results, selector);
-    // }
+    if (call.calls && (!selector || !ignoreSwap.has(selector))) {
+      extractCalls(call.calls, results, selector);
+    }
   }
   return results;
 }
@@ -550,7 +550,7 @@ async function simulateTx(to, input, blockNumber, txIndex, gas) {
         : "latest";
   try {
     const result = await rpc("eth_call", [
-      { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: gas != null ? "0x" + Number(gas).toString(16) : "0x5F5E100" },
+      { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: gas != null ? "0x" + Number(gas).toString(16) : "0x3473BC0" },
       block,
     ]);
     return { error: null, notRevert: true, result: result || null };

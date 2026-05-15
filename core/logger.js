@@ -38,13 +38,15 @@ function createLogger(nameOrFile, { console: withConsole = false } = {}) {
     }),
   ];
 
-  transports.push(
-    new winston.transports.Console({
-      level: withConsole ? "info" : "error",
-      format: consoleFormat,
-      stderrLevels: [],
-    })
-  );
+  if (withConsole) {
+    transports.push(
+      new winston.transports.Console({
+        level: "info",
+        format: consoleFormat,
+        stderrLevels: [],
+      })
+    );
+  }
 
   const logger = winston.createLogger({ transports });
 

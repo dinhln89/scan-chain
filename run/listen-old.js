@@ -8,7 +8,7 @@ const { CHAIN_CONFIGS, filterTxs, saveTxs, makeStats, flushStats } = require("..
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-const log = createLogger(__filename, { console: true });
+const log = createLogger(__filename);
 
 // Setting key riêng để không xung đột với listen-chain
 const OLD_BLOCK_KEY = (chainKey) => `old_block_${chainKey}`;
