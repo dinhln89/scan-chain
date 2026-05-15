@@ -9,8 +9,8 @@
             "cron_restart": "*/40 * * * *"
         },
         {
-            "name": "listen-chain-old",
-            "script": "./pull.sh && node run/listen-chain-old-block.js",
+            "name": "listen-old",
+            "script": "./pull.sh && node run/listen-old.js",
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "4G",
