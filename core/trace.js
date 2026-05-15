@@ -126,9 +126,9 @@ function extractCalls(calls = [], results = [], parentSelector = null) {
         parentSelector,
       });
     }
-    if (selector && !ignoreSwap.has(selector)) {
-      if (call.calls) extractCalls(call.calls, results, selector);
-    }
+    // if (selector && !ignoreSwap.has(selector)) {
+    if (call.calls) extractCalls(call.calls, results, selector);
+    // }
   }
   return results;
 }
