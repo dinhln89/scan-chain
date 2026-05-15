@@ -80,7 +80,7 @@ async function processBlock(chainKey, chain, web3, stats) {
   if (savedBlock >= chainBlock) return false;
 
   const nextBlock = savedBlock + 1n;
-  console.log(`[${chain.label}] Block #${nextBlock}`);
+  log.info(`[${chain.label}] Block #${nextBlock}`);
   let block;
   try {
     block = await web3.eth.getBlock(nextBlock, true);
