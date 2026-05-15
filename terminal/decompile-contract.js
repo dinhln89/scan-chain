@@ -623,6 +623,7 @@ async function decompileContract(address) {
     if (db) {
       await db.ContractDecompile.upsert({
         address,
+        chain: TYPE_ARG,
         proxyOf: proxy.impl.toLowerCase(),
         source: "proxy",
         functions: [],
@@ -670,7 +671,7 @@ async function decompileContract(address) {
     ];
 
     if (db) {
-      await db.ContractDecompile.upsert({ address, source: "sourcify", functions: fns }).catch(() => {});
+      await db.ContractDecompile.upsert({ address, chain: TYPE_ARG, source: "sourcify", functions: fns }).catch(() => {});
     }
 
     if (initFnList.length) {
@@ -794,6 +795,7 @@ async function decompileContract(address) {
     }
     await db.ContractDecompile.upsert({
       address,
+      chain: TYPE_ARG,
       source: "gigahorse",
       externalCalls: [...new Set(callSigs)].sort(),
       events: [...new Set(events)].sort(),

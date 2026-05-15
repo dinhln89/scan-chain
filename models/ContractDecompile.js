@@ -17,6 +17,12 @@ const ContractDecompile = sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
+    // Chain: "bsc" | "eth"
+    chain: {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: "bsc",
+    },
     // Nguồn: "sourcify" | "gigahorse"
     source: {
       type: DataTypes.STRING(20),

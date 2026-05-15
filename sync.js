@@ -61,18 +61,34 @@ async function main() {
   const contractIndexes = await qi.showIndex('contracts');
   const isBlockIndexExists = contractIndexes.some(i => i.name === 'contracts_is_block');
   if (!isBlockIndexExists) {
-    done = withTimer('[4/5] Tạo index contracts.isBlock...');
+    done = withTimer('[4/6] Tạo index contracts.isBlock...');
     await qi.addIndex('contracts', {
       fields: ['isBlock'],
       name: 'contracts_is_block',
     });
     done();
   } else {
-    process.stdout.write('[4/5] Index contracts_is_block đã tồn tại, bỏ qua\n');
+    process.stdout.write('[4/6] Index contracts_is_block đã tồn tại, bỏ qua\n');
     log.info('Index contracts_is_block da ton tai, bo qua');
   }
 
-  process.stdout.write('[5/5] Hoàn tất!\n');
+  const { DataTypes } = require('sequelize');
+  const decompileColumns = await qi.describeTable('contract_decompiles').catch(() => null);
+  if (decompileColumns && !decompileColumns.chain) {
+    done = withTimer('[5/6] Thêm cột chain vào contract_decompiles...');
+    await qi.addColumn('contract_decompiles', 'chain', {
+      type: DataTypes.STRING(10),
+      allowNull: false,
+      defaultValue: 'bsc',
+      after: 'proxyOf',
+    });
+    done();
+  } else {
+    process.stdout.write('[5/6] Cột chain đã tồn tại, bỏ qua\n');
+    log.info('Cot chain da ton tai, bo qua');
+  }
+
+  process.stdout.write('[6/6] Hoàn tất!\n');
   log.info('Hoan tat');
   process.exit(0);
 }
