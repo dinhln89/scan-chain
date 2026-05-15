@@ -4,14 +4,23 @@ const Setting = require("../models/Setting");
 const IgnoreAddress = require("../core/ignore-address");
 const IgnoreMethod = require("../core/ignore-method");
 const { syncIgnoreSwap } = require("../core/trace");
-const { CHAIN_CONFIGS, filterTxs, saveTxs, makeStats, flushStats } = require("../core/chain-block");
+const {
+  CHAIN_CONFIGS,
+  filterTxs,
+  saveTxs,
+  makeStats,
+  flushStats,
+} = require("../core/chain-block");
 const { createLogger } = require("../core/logger");
-require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../.env"),
+});
 
 const log = createLogger(__filename);
 
 const OLD_BLOCK_KEY = (chainKey) => `old_block_${chainKey}`;
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 3;
+const BATCH_DELAY_MS = 1000; // nhường RPC cho listen-chain
 
 async function fetchAndSave(chainKey, chain, web3, blockNumber) {
   let block;
@@ -52,7 +61,7 @@ async function processBatch(chainKey, chain, web3, stats) {
   }
 
   const results = await Promise.allSettled(
-    blockNumbers.map((b) => fetchAndSave(chainKey, chain, web3, b))
+    blockNumbers.map((b) => fetchAndSave(chainKey, chain, web3, b)),
   );
 
   for (const r of results) {
@@ -79,18 +88,20 @@ function startChainLoop(chainKey, chain) {
   const stats = makeStats();
 
   const loop = async () => {
-    let delay = 0;
+    let delay = BATCH_DELAY_MS;
     try {
       const hasMore = await processBatch(chainKey, chain, web3, stats);
       if (!hasMore) return;
     } catch (err) {
       log.error(`[${chain.label}] Loi: ${err.message}`);
-      delay = 2000;
+      delay = 5000;
     }
     setTimeout(loop, delay);
   };
 
-  log.info(`[${chain.label}] Bat dau crawl old blocks (batch=${BATCH_SIZE})...`);
+  log.info(
+    `[${chain.label}] Bat dau crawl old blocks (batch=${BATCH_SIZE})...`,
+  );
   loop();
 }
 

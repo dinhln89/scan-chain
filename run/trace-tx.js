@@ -117,7 +117,7 @@ async function processOne(tx) {
   }
 }
 
-const CONCURRENCY = 5;
+const CONCURRENCY = 2;
 // inFlight: set tx.id đang xử lý — loại khỏi DB query để tránh fetch trùng
 const inFlight = new Set();
 
