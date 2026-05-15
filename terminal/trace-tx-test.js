@@ -3,7 +3,7 @@ require("dotenv").config({
 });
 
 const sequelize = require("../db");
-const { rpc, rawRpcEth, setRpcHandler, extractAddressesFromInput } = require("../core/trace");
+const { rpc, rawRpcEth, rpcContext, extractAddressesFromInput } = require("../core/trace");
 const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 
 async function tryConnectDb() {
@@ -32,7 +32,6 @@ async function main() {
     console.log("  [BSC] Khong tim thay, thu ETH...");
     txData = await rawRpcEth("eth_getTransactionByHash", [txHash]);
     chain = "ETH";
-    if (txData) setRpcHandler(rawRpcEth);
   }
   if (!txData) {
     console.error("Khong tim thay tx tren BSC lan ETH:", txHash);
@@ -61,7 +60,8 @@ async function main() {
 
   // --- Full analysis ---
   console.log("\n[processTxData]");
-  const result = await processTxData(tx);
+  const rpcFn = chain === "ETH" ? rawRpcEth : null;
+  const result = await rpcContext.run(rpcFn, () => processTxData(tx));
 
   if (!result) {
     console.log("  => SKIP: khong thoa isTransferFromErc20 va isTransferSender");
@@ -106,7 +106,8 @@ async function main() {
       if (node.to?.toLowerCase() === ECRECOVER) found.push({ input: node.input, output: node.output });
       (node.calls || []).forEach(scanEcrecover);
     }
-    const rawTrace = await (require("../core/trace").rpc)("debug_traceTransaction", [tx.hash, { tracer: "callTracer" }]);
+    const rpcFn = chain === "ETH" ? rawRpcEth : rpc;
+    const rawTrace = await rpcFn("debug_traceTransaction", [tx.hash, { tracer: "callTracer" }]);
     scanEcrecover(rawTrace);
     console.log("\n[ecrecover precompile calls]", found.length > 0 ? "" : "(none)");
     found.forEach((f, i) => console.log(`  [${i}] output=${f.output}`));

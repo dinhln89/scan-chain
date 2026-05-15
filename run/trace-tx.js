@@ -6,13 +6,15 @@ const {
   processTxData,
   buildRow,
 } = require("../core/trace-tx-process");
+const { rpcContext, rawRpcEth } = require("../core/trace");
 const { append } = require("../core/sheets");
 const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
 
 async function processTx(tx) {
-  const result = await processTxData(tx);
+  const rpcFn = tx.type === "eth" ? rawRpcEth : null;
+  const result = await rpcContext.run(rpcFn, () => processTxData(tx));
   if (!result) return;
 
   const now = new Date();

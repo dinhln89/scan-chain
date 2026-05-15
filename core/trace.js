@@ -2,9 +2,13 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
+const { AsyncLocalStorage } = require("async_hooks");
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
 const { sendMessage } = require("./telegram");
+
+// Per-async-context RPC override — dùng cho concurrent multi-chain processing
+const rpcContext = new AsyncLocalStorage();
 
 // Cache của IgnoreMethod — dùng trong extractCalls để quyết định có đệ quy không.
 // Được rebuild sau khi IgnoreMethod.syncFromSheet() hoàn tất.
@@ -78,12 +82,18 @@ async function rawRpcEth(method, params) {
 }
 
 async function rpc(method, params) {
+  const ctxFn = rpcContext.getStore();
+  if (ctxFn) return ctxFn(method, params);
   if (_rpcHandler) return _rpcHandler(method, params);
   return rawRpc(method, params);
 }
 
 async function batchRpc(requests) {
   if (requests.length === 0) return [];
+  const ctxFn = rpcContext.getStore();
+  if (ctxFn) {
+    return Promise.all(requests.map((r) => ctxFn(r.method, r.params)));
+  }
   if (_rpcHandler) {
     return Promise.all(requests.map((r) => _rpcHandler(r.method, r.params)));
   }
@@ -559,6 +569,7 @@ module.exports = {
   rawRpc,
   rawRpcEth,
   rpc,
+  rpcContext,
   setRpcHandler,
   simulateTx,
   syncIgnoreSwap,
