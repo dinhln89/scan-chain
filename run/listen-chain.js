@@ -11,7 +11,7 @@ require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") }
 
 const VERBOSE = process.argv.includes("--verbose");
 
-const log = createLogger(__filename, { console: VERBOSE });
+const log = createLogger(__filename, { console: true });
 
 const CHAIN_CONFIGS = {
   bsc: {
