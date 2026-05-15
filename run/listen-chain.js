@@ -8,7 +8,7 @@ const { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats 
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
-const log = createLogger(__filename, { console: true });
+const log = createLogger(__filename);
 
 async function processBlock(chainKey, chain, web3, stats) {
   let chainBlock;
