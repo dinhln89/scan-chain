@@ -3,7 +3,7 @@ require("dotenv").config({
 });
 
 const sequelize = require("../db");
-const { rpc, extractAddressesFromInput } = require("../core/trace");
+const { rpc, rawRpcEth, setRpcHandler, extractAddressesFromInput } = require("../core/trace");
 const { syncAll, processTxData, buildRow } = require("../core/trace-tx-process");
 
 async function tryConnectDb() {
@@ -24,11 +24,21 @@ async function main() {
   await syncAll();
 
   console.log("\n[TX] Fetching:", txHash);
-  const txData = await rpc("eth_getTransactionByHash", [txHash]);
+
+  // Uu tien BSC, neu khong co thi thu ETH
+  let txData = await rpc("eth_getTransactionByHash", [txHash]);
+  let chain = "BSC";
   if (!txData) {
-    console.error("Khong tim thay tx:", txHash);
+    console.log("  [BSC] Khong tim thay, thu ETH...");
+    txData = await rawRpcEth("eth_getTransactionByHash", [txHash]);
+    chain = "ETH";
+    if (txData) setRpcHandler(rawRpcEth);
+  }
+  if (!txData) {
+    console.error("Khong tim thay tx tren BSC lan ETH:", txHash);
     process.exit(1);
   }
+  console.log("  chain       :", chain);
 
   const tx = {
     hash: txData.hash,
@@ -93,11 +103,12 @@ async function main() {
   console.log("\n" + "=".repeat(60));
 
   if (result.isTransferFromErc20 && result.simulateResult?.notRevert) {
+    const scanBase = chain === "ETH" ? "etherscan.io" : "bscscan.com";
     console.log("[Sheet4 row]");
     console.log(" ", [
       tx.hash,
-      `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-      `https://bscscan.com/tx/${tx.hash}`,
+      `https://${scanBase}/address/${tx.to?.toLowerCase()}`,
+      `https://${scanBase}/tx/${tx.hash}`,
       result.symbol,
       "YES",
       result.selector ?? "",
@@ -107,7 +118,7 @@ async function main() {
 
   if (result.isTransferSender) {
     console.log("[Sheet1 row]");
-    console.log(" ", buildRow(tx, result));
+    console.log(" ", buildRow(tx, result, { chain }));
   }
 
   console.log("=".repeat(60));

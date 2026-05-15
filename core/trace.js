@@ -18,6 +18,10 @@ const BSC_RPC =
   process.env.BSC_RPC ||
   "https://bsc-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
 
+const ETH_RPC =
+  process.env.ETH_RPC ||
+  "https://eth-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2";
+
 let _rpcHandler = null;
 
 function setRpcHandler(fn) {
@@ -27,6 +31,7 @@ function setRpcHandler(fn) {
 // Serialize tất cả RPC calls qua 1 queue với delay tối thiểu giữa mỗi call
 const RPC_INTERVAL_MS = parseInt(process.env.RPC_INTERVAL_MS || "50", 10);
 let _rpcChain = Promise.resolve();
+let _rpcChainEth = Promise.resolve();
 
 function enqueueRpc(fn) {
   const result = _rpcChain.then(fn);
@@ -37,9 +42,31 @@ function enqueueRpc(fn) {
   return result;
 }
 
+function enqueueRpcEth(fn) {
+  const result = _rpcChainEth.then(fn);
+  _rpcChainEth = result.then(
+    () => new Promise((r) => setTimeout(r, RPC_INTERVAL_MS)),
+    () => new Promise((r) => setTimeout(r, RPC_INTERVAL_MS)),
+  );
+  return result;
+}
+
 async function rawRpc(method, params) {
   return enqueueRpc(async () => {
     const res = await fetch(BSC_RPC, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message);
+    return json.result;
+  });
+}
+
+async function rawRpcEth(method, params) {
+  return enqueueRpcEth(async () => {
+    const res = await fetch(ETH_RPC, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
@@ -498,6 +525,7 @@ module.exports = {
   hasSignatureInInput,
   hasV3PathInInput,
   rawRpc,
+  rawRpcEth,
   rpc,
   setRpcHandler,
   simulateTx,

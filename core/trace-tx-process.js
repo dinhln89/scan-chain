@@ -381,12 +381,14 @@ async function processTxData(tx) {
 }
 
 // Tạo row cho Sheet1 (trace-tx) hoặc Sheet5 (trace-tx-sync)
-function buildRow(tx, result, { includeSimulate = false } = {}) {
+function buildRow(tx, result, { includeSimulate = false, chain = "BSC" } = {}) {
   const now = new Date();
+  const scanBase = chain === "ETH" ? "etherscan.io" : "bscscan.com";
   const row = [
     tx.hash,
-    `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-    `https://bscscan.com/tx/${tx.hash}`,
+    chain,
+    `https://${scanBase}/address/${tx.to?.toLowerCase()}`,
+    `https://${scanBase}/tx/${tx.hash}`,
     result.symbol,
     result.inputCallAddrs,
     result.getReservesParentSelectors.join(", "),
