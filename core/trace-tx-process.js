@@ -56,6 +56,38 @@ const WELL_KNOWN_TOKENS = new Set([
   "0x111111111117dc0aa78b770fa6a738034120c302", // 1INCH
 ]);
 
+// Selector view-only của ERC20, SwapPair, SwapRouter — không có signal
+const VIEW_ONLY_SELECTORS = new Set([
+  // ERC20 view
+  "0x70a08231", // balanceOf(address)
+  "0x18160ddd", // totalSupply()
+  "0xdd62ed3e", // allowance(address,address)
+  "0x313ce567", // decimals()
+  "0x06fdde03", // name()
+  "0x95d89b41", // symbol()
+  // SwapPair view
+  "0x0902f1ac", // getReserves()
+  "0x0dfe1681", // token0()
+  "0xd21220a7", // token1()
+  "0x5909c0d5", // price0CumulativeLast()
+  "0x5a3d5493", // price1CumulativeLast()
+  "0x7464fc3d", // kLast()
+  "0x017e7e58", // token0() (alt encoding some pairs)
+  // SwapRouter / Factory view
+  "0xd06ca61f", // getAmountsOut(uint256,address[])
+  "0x1f00ca74", // getAmountsIn(uint256,address[])
+  "0xad615dec", // quote(uint256,uint256,uint256)
+  "0xad5c4648", // WETH()
+  "0xc45a0155", // factory()
+  "0xe6a43905", // getPair(address,address)
+  // Uniswap V3 pool view
+  "0x3850c7bd", // slot0()
+  "0x1a686502", // liquidity()
+  "0xddca3f43", // fee()
+  "0x70cf754a", // feeGrowthGlobal0X128()
+  "0x46141319", // feeGrowthGlobal1X128()
+]);
+
 // Gọi 1 lần khi khởi động — sync tất cả ignore data từ sheet
 async function syncAll() {
   await IgnoreMethod.syncFromSheet();
@@ -199,12 +231,16 @@ async function processTxData(tx) {
     calls.map((c) => c.to?.toLowerCase()).filter((a) => a && inputAddrs.has(a)),
   );
 
-  // Địa chỉ chỉ nhận fallback call (input rỗng/0x) → không có ý nghĩa signal
-  const fallbackOnlyAddrs = new Set(
+  // Địa chỉ chỉ nhận fallback hoặc view-only calls → không có signal
+  const noSignalAddrs = new Set(
     [...calledFromInput].filter((addr) =>
       calls
         .filter((c) => c.to?.toLowerCase() === addr)
-        .every((c) => !c.input || c.input === "0x"),
+        .every((c) => {
+          if (!c.input || c.input === "0x") return true;
+          const sel = c.input.slice(0, 10).toLowerCase();
+          return VIEW_ONLY_SELECTORS.has(sel);
+        }),
     ),
   );
 
@@ -218,7 +254,7 @@ async function processTxData(tx) {
   }
 
   const inputCallAddrs = [...calledFromInput]
-    .filter((a) => !WELL_KNOWN_TOKENS.has(a) && !fallbackOnlyAddrs.has(a))
+    .filter((a) => !WELL_KNOWN_TOKENS.has(a) && !noSignalAddrs.has(a))
     .map((a) => {
       const sel = firstSelectorByAddr.get(a);
       return sel ? `${a.slice(0, 10)} => ${sel}` : a.slice(0, 10);
