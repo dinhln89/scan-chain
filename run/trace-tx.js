@@ -83,12 +83,13 @@ const retryCount = new Map();
 
 async function processOne(tx) {
   const t0 = Date.now();
-  log.info(`TX ${tx.hash}`);
+  const chain = tx.type === "eth" ? "ETH" : "BSC";
+  log.info(`[${chain}] TX ${tx.hash}`);
   try {
     await processTx(tx);
     await tx.update({ processed: true });
     retryCount.delete(tx.id);
-    log.info(`DONE ${tx.hash} (${Date.now() - t0}ms)`);
+    log.info(`[${chain}] DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
     // Lỗi ignored hoặc revert: không có giá trị retry, đánh processed luôn
     if (
@@ -105,12 +106,12 @@ async function processOne(tx) {
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
       log.warn(
-        `Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`,
+        `[${chain}] Bo qua tx ${tx.hash} sau ${MAX_RETRIES} lan loi: ${err.message}`,
       );
     } else {
       retryCount.set(tx.id, count);
       log.error(
-        `Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`,
+        `[${chain}] Loi tx ${tx.hash} (lan ${count}/${MAX_RETRIES}): ${err.message}`,
       );
     }
   }
