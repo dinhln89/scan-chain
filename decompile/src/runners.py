@@ -23,7 +23,7 @@ DEFAULT_MEMORY_LIMIT = 50 * 1_000_000_000
 """Hard capped memory limit for analyses processes (50 GB)"""
 
 MAX_CONTEXT_DEPTH_INPUT_FILE = "MaxContextDepth.csv"
-MAIN_DECOMPILER_MAX_CONTEXT_DEPTH = 20
+MAIN_DECOMPILER_MAX_CONTEXT_DEPTH = 10
 FALLBACK_SCALABLE_MAX_CONTEXT_DEPTH = 10
 LAST_RESORT_MAX_CONTEXT_DEPTH = 10
 
@@ -104,7 +104,8 @@ class AnalysisExecutor:
                 self.souffle_bin,
                 join(os.getcwd(), souffle_client),
                 f"--fact-dir={in_dir}", f"--output-dir={out_dir}",
-                "-M", self.souffle_macros
+                "-M", self.souffle_macros,
+                "-L", functor_path,
             ]
 
         if run_process(analysis_args, self.calc_timeout(start_time, half), stderr=err_file) < 0:

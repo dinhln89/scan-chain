@@ -29,7 +29,7 @@ DEFAULT_RESULTS_FILE = 'results.json'
 DEFAULT_INLINER_DL = join(GIGAHORSE_DIR, 'clientlib/function_inliner.dl')
 """IR helping inliner specification file."""
 
-DEFAULT_INLINER_ROUNDS = 6
+DEFAULT_INLINER_ROUNDS = 3
 
 DEFAULT_CACHE_DIR = join(GIGAHORSE_DIR, 'cache')
 

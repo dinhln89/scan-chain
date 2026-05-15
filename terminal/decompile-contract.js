@@ -12,10 +12,9 @@ const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const TEMP_DIR = path.resolve(__dirname, "../.temp");
 const GIGAHORSE_CACHE_DIR = path.resolve(__dirname, "../data/gigahorse-cache");
 const PROJECT_ROOT = path.resolve(__dirname, "..");
-const GIGAHORSE_BIN = path.resolve(process.env.HOME, ".gigahorse/bin/gigahorse"); // Docker wrapper
-const GIGAHORSE_LOCAL = path.join(DECOMPILE_DIR, "gigahorse.py");
-const GIGAHORSE_ADDON = path.join(DECOMPILE_DIR, "souffle-addon");
-const PYTHON = process.env.PYTHON || "python3.10";
+const GIGAHORSE_ROOT = path.resolve(process.env.HOME, ".gigahorse");
+const DOCKER_IMAGE = "ghcr.io/nevillegrech/gigahorse-toolchain-m1:latest";
+const CONTAINER_ROOT = "/opt/gigahorse/gigahorse-toolchain";
 const TIMEOUT = process.env.DECOMPILE_TIMEOUT || 600;
 const BSC_CHAIN_ID = 56;
 const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
@@ -637,6 +636,16 @@ async function decompileContract(address) {
 
     [initFnList, mutList, viewList].forEach((l) => l.sort((a, b) => a.localeCompare(b)));
 
+    const fns = [
+      ...initFnList.map((sig) => ({ group: "One-time init", sig })),
+      ...mutList.map((sig) => ({ group: "State-changing", sig })),
+      ...viewList.map((sig) => ({ group: "View", sig })),
+    ];
+
+    if (db) {
+      await db.ContractDecompile.upsert({ address, source: "sourcify", functions: fns }).catch(() => {});
+    }
+
     if (initFnList.length) {
       console.log(`\n// One-time init (${initFnList.length}):`);
       initFnList.forEach((s) => console.log(`// function ${s}`));
@@ -691,38 +700,34 @@ async function decompileContract(address) {
     // Xóa stale working dir để gigahorse không skip contract
     fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
     try {
-      let cmd, opts;
-      const localLibs = fs.existsSync(path.join(GIGAHORSE_ADDON, "libfunctors.so"));
-      if (localLibs) {
-        // Ưu tiên local build (nhanh hơn Docker ~2x)
-        cmd = [
-          PYTHON,
-          GIGAHORSE_LOCAL,
-          "--interpreted",
-          `-j 1`,
-          `-T ${TIMEOUT}`,
-          `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
-          hexFile,
-        ].join(" ");
-        opts = {
-          stdio: "inherit",
-          cwd: PROJECT_ROOT,
-          env: { ...process.env, DYLD_LIBRARY_PATH: GIGAHORSE_ADDON },
-        };
-      } else {
-        // Fallback: Docker
-        fs.mkdirSync(TEMP_DIR, { recursive: true });
-        const relHex = path.relative(PROJECT_ROOT, hexFile);
-        cmd = [
-          GIGAHORSE_BIN,
-          "--interpreted",
-          `-T ${TIMEOUT}`,
-          `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
-          hexFile,
-        ].join(" ");
-        opts = { stdio: "inherit", cwd: PROJECT_ROOT };
-      }
-      execSync(cmd, opts);
+      fs.mkdirSync(path.join(GIGAHORSE_ROOT, ".temp"), { recursive: true });
+      fs.mkdirSync(path.join(GIGAHORSE_ROOT, "cache"), { recursive: true });
+      const uid = process.getuid();
+      const gid = process.getgid();
+      const bind = (src, dst) => `--mount type=bind,source=${src},target=${CONTAINER_ROOT}/${dst}`;
+      const cmd = [
+        "docker run",
+        `-v ${process.env.HOME}:${process.env.HOME}`,
+        `--mount type=bind,source=${GIGAHORSE_ROOT}/.temp,target=${CONTAINER_ROOT}/.temp`,
+        `--mount type=bind,source=${GIGAHORSE_ROOT}/cache,target=${CONTAINER_ROOT}/cache`,
+        bind(`${DECOMPILE_DIR}/src`, "src"),
+        bind(`${DECOMPILE_DIR}/logic`, "logic"),
+        bind(`${DECOMPILE_DIR}/clients`, "clients"),
+        bind(`${DECOMPILE_DIR}/clientlib`, "clientlib"),
+        bind(`${DECOMPILE_DIR}/gigahorse.py`, "gigahorse.py"),
+        bind(`${DECOMPILE_DIR}/generatefacts`, "generatefacts"),
+        "--rm",
+        `-u ${uid}:${gid}`,
+        `-w ${PROJECT_ROOT}`,
+        "-i",
+        DOCKER_IMAGE,
+        "--interpreted",
+        "--skip_sig_resolution",
+        `-T ${TIMEOUT}`,
+        `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
+        hexFile,
+      ].join(" ");
+      execSync(cmd, { stdio: "inherit", cwd: PROJECT_ROOT });
     } catch {
       console.error("gigahorse thất bại");
       return;
