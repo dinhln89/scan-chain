@@ -133,7 +133,11 @@ async function main() {
     ]);
   }
 
-  if (result.isTransferSender) {
+  const hasSignal =
+    !!result.inputCallAddrs ||
+    result.getReservesParentSelectors.length > 0 ||
+    result.pairTokenSymbols.length > 0;
+  if (result.isTransferSender && hasSignal) {
     console.log("[Sheet1 row]");
     console.log(" ", buildRow(tx, result, { chain }));
   }
