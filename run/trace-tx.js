@@ -38,8 +38,12 @@ async function processTx(tx) {
     );
   }
 
-  // Sheet1: isTransferSender hoặc phát hiện token trong pair
-  if (result.isTransferSender || result.pairTokenSymbols.length > 0) {
+  // Sheet1: isTransferSender và ít nhất 1 trong 3 field có giá trị
+  const hasSignal =
+    !!result.inputCallAddrs ||
+    result.getReservesParentSelectors.length > 0 ||
+    result.pairTokenSymbols.length > 0;
+  if (result.isTransferSender && hasSignal) {
     await append([buildRow(tx, result, { chain })], { sheet: "Sheet1" });
   }
 
