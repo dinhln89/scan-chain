@@ -88,14 +88,6 @@ async function main() {
     log.info('Cot transactionIndex da ton tai, bo qua');
   }
 
-  if (txColumns && txColumns.type) {
-    done = withTimer('[6/7] Cập nhật ENUM type transactions (ethereum → eth)...');
-    await sequelize.query(`ALTER TABLE transactions MODIFY COLUMN \`type\` ENUM('bsc', 'eth') NOT NULL DEFAULT 'bsc'`);
-    done();
-  } else {
-    process.stdout.write('[6/7] Bỏ qua cập nhật ENUM type\n');
-  }
-
   const decompileColumns = await qi.describeTable('contract_decompiles').catch(() => null);
   if (decompileColumns && !decompileColumns.chain) {
     done = withTimer('[7/7] Thêm cột chain vào contract_decompiles...');
