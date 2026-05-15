@@ -9,6 +9,14 @@
             "cron_restart": "*/40 * * * *"
         },
         {
+            "name": "listen-chain-old",
+            "script": "./pull.sh && node run/listen-chain-old-block.js",
+            "instances": 1,
+            "autorestart": true,
+            "max_memory_restart": "4G",
+            "cron_restart": "*/40 * * * *"
+        },
+        {
             "name": "trace-tx",
             "script": "./pull.sh && node run/trace-tx.js",
             "instances": 1,

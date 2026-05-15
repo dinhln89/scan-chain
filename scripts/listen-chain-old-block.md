@@ -1,0 +1,3 @@
+- Lấy blockNumber hiện tại, nếu chưa có trong db thì insert vào. 
+- Xử lý giống listen-chain để xử lý từng tx.
+- Lần sau chạy sẽ lấy blockNumber trong DB rồi - 1 để scan.
