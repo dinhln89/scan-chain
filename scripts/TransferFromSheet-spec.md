@@ -1,0 +1,4 @@
+- Lấy các địa chỉ trong input của tx lưu vào 1 array join với sender lưu vào mảng A
+- Check các call transferFrom của BEP20 nếu có from trong mảng A và transfer amount > 0 thì lưu vào mảng B
+- Check mảng B có length > 0
+- Kết quả ko có error hay revert từ simulateTx thì insert vào Sheet4

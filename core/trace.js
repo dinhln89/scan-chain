@@ -381,7 +381,7 @@ async function analyzeTx(txHash, txData = null) {
   if (txData) {
     const sel = txData.input?.slice(0, 10)?.toLowerCase();
     if (IgnoreMethod.getAll().has(sel)) throw new Error("IGNORED_METHOD");
-    if (hasSignatureInInput(txData.input)) throw new Error("IGNORED_SIGN");
+    // if (hasSignatureInInput(txData.input)) throw new Error("IGNORED_SIGN");
     if (hasV3PathInInput(txData.input)) throw new Error("IGNORED_V3_PATH");
     const preAddrs = IgnoreAddress.getAll();
     if (preAddrs.has(txData.from?.toLowerCase())) throw new Error("IGNORED_ADDRESS");
@@ -403,7 +403,7 @@ async function analyzeTx(txHash, txData = null) {
   const selector = tx.input?.slice(0, 10)?.toLowerCase();
 
   if (ignoredMethods.has(selector)) throw new Error("IGNORED_METHOD");
-  if (hasSignatureInInput(tx.input)) throw new Error("IGNORED_SIGN");
+  // if (hasSignatureInInput(tx.input)) throw new Error("IGNORED_SIGN");
   if (hasV3PathInInput(tx.input)) throw new Error("IGNORED_V3_PATH");
   if (ignoredAddrs.has(tx.from?.toLowerCase()))
     throw new Error("IGNORED_ADDRESS");
