@@ -53,7 +53,7 @@ async function main() {
   await sequelize.ensureDatabase();
   done();
 
-  const tables = ["transactions", "contracts", "contract_decompiles", "ignore_addresses", "settings", "tokens", "users"];
+  const tables = ["transactions", "contracts", "contract_decompiles", "four_byte_selectors", "ignore_addresses", "settings", "tokens", "users"];
 
   console.log("");
   for (const table of tables) {

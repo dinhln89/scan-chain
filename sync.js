@@ -88,6 +88,19 @@ async function main() {
     log.info('Cot transactionIndex da ton tai, bo qua');
   }
 
+  if (txColumns && !txColumns.gas) {
+    done = withTimer('[6/7] Thêm cột gas vào transactions...');
+    await qi.addColumn('transactions', 'gas', {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+      after: 'value',
+    });
+    done();
+  } else {
+    process.stdout.write('[6/7] Cột gas đã tồn tại, bỏ qua\n');
+    log.info('Cot gas da ton tai, bo qua');
+  }
+
   const decompileColumns = await qi.describeTable('contract_decompiles').catch(() => null);
   if (decompileColumns && !decompileColumns.chain) {
     done = withTimer('[7/7] Thêm cột chain vào contract_decompiles...');
