@@ -212,6 +212,7 @@ async function processTxData(tx) {
     calls,
     logs,
     transfers,
+    isEcrecoverSender,
     isTransferSender,
     isTransferFromErc20,
     selector,
@@ -368,6 +369,7 @@ async function processTxData(tx) {
   return {
     calls,
     transfers,
+    isEcrecoverSender,
     isTransferSender,
     isTransferFromErc20,
     selector,

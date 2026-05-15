@@ -40,6 +40,25 @@ async function processTx(tx) {
   if (result.isTransferSender || result.pairTokenSymbols.length > 0) {
     await append([buildRow(tx, result)], { sheet: "Sheet1" });
   }
+
+  // TransferFromSheet: B.length > 0 và C == true (ecrecover trả về sender)
+  if (result.isTransferFromErc20 && result.isEcrecoverSender) {
+    const now = new Date();
+    await append(
+      [
+        [
+          tx.hash,
+          `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
+          `https://bscscan.com/tx/${tx.hash}`,
+          result.symbol,
+          result.selector ?? "",
+          tx.blockNumber,
+          now.toLocaleString(),
+        ],
+      ],
+      { sheet: "TransferFromSheet" },
+    );
+  }
 }
 
 // Lỗi có thể bỏ qua hoàn toàn (đánh processed=true, không retry)

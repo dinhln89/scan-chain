@@ -375,6 +375,25 @@ async function getErc20SymbolBatch(addresses) {
   return symbols;
 }
 
+const ECRECOVER_PRECOMPILE = "0x0000000000000000000000000000000000000001";
+
+function hasEcrecoverForSender(node, sender) {
+  if (!node) return false;
+  if (node.to?.toLowerCase() === ECRECOVER_PRECOMPILE) {
+    const out = node.output;
+    if (out && out.length === 66) {
+      const recovered = "0x" + out.slice(26, 66).toLowerCase();
+      if (recovered === sender) return true;
+    }
+  }
+  if (node.calls) {
+    for (const c of node.calls) {
+      if (hasEcrecoverForSender(c, sender)) return true;
+    }
+  }
+  return false;
+}
+
 // txData co the truyen tu DB de bo qua eth_getTransactionByHash
 async function analyzeTx(txHash, txData = null) {
   // Pre-filter using txData before any RPC — avoids receipt call for ignored txs
@@ -472,11 +491,15 @@ async function analyzeTx(txHash, txData = null) {
     return BigInt("0x" + input.slice(138, 202)) > 0n;
   });
 
+  // C: ecrecover precompile call trả về địa chỉ trùng sender
+  const isEcrecoverSender = hasEcrecoverForSender(trace, sender);
+
   return {
     addresses,
     calls,
     logs: receipt?.logs || [],
     hasSignature: hasSignatureInInput(tx.input),
+    isEcrecoverSender,
     isTransferFromErc20,
     isTransferSender,
     selector,
