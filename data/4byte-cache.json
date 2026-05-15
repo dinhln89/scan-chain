@@ -18,5 +18,15 @@
   "0x2186ff4e": "received(uint256,address,uint256)",
   "0x8c379a0": "Error(string)",
   "0xf3ee7e2c": "setQueue(address)",
-  "0xb608d214": "totalInterestGenerated()"
+  "0xb608d214": "totalInterestGenerated()",
+  "0x36568abe": "renounceRole(bytes32,address)",
+  "0x95d89b41": "symbol()",
+  "0xfff6cae9": "sync()",
+  "0x485cc955": "initialize(address,address)",
+  "0x2f2ff15d": "grantRole(bytes32,address)",
+  "0xa217fddf": "DEFAULT_ADMIN_ROLE()",
+  "0x5c975abb": "paused()",
+  "0x18160ddd": "totalSupply()",
+  "0x313ce567": "decimals()",
+  "0xe63ab1e9": "PAUSER_ROLE()"
 }

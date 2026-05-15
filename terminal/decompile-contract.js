@@ -533,20 +533,28 @@ async function detectProxy(address) {
   return null;
 }
 
+function parseJsonField(val) {
+  if (Array.isArray(val)) return val;
+  if (typeof val === "string") { try { return JSON.parse(val); } catch { return []; } }
+  return [];
+}
+
 function printCached(row) {
   if (row.proxyOf && row.source === "proxy") {
     console.log(`Proxy → ${row.proxyOf}`);
     return;
   }
-  if (row.externalCalls?.length) {
+  const externalCalls = parseJsonField(row.externalCalls);
+  if (externalCalls.length) {
     console.log("\n// External calls detected:");
-    row.externalCalls.forEach((s) => console.log(`//   interface { function ${s}; }`));
+    externalCalls.forEach((s) => console.log(`//   interface { function ${s}; }`));
   }
-  if (row.events?.length) {
-    row.events.forEach((e) => console.log(`event ${e};`));
+  const events = parseJsonField(row.events);
+  if (events.length) {
+    events.forEach((e) => console.log(`event ${e};`));
   }
   const groups = new Map();
-  for (const { group, sig } of row.functions || []) {
+  for (const { group, sig } of parseJsonField(row.functions)) {
     if (!groups.has(group)) groups.set(group, []);
     groups.get(group).push(sig);
   }
