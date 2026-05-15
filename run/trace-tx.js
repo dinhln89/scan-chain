@@ -16,6 +16,8 @@ async function processTx(tx) {
   if (!result) return;
 
   const now = new Date();
+  const chain = tx.type === "eth" ? "ETH" : "BSC";
+  const scanBase = chain === "ETH" ? "etherscan.io" : "bscscan.com";
 
   // Sheet4: B.length > 0 (isTransferFromErc20) và simulate không revert
   if (result.isTransferFromErc20 && result.simulateResult?.notRevert) {
@@ -23,8 +25,8 @@ async function processTx(tx) {
       [
         [
           tx.hash,
-          `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-          `https://bscscan.com/tx/${tx.hash}`,
+          `https://${scanBase}/address/${tx.to?.toLowerCase()}`,
+          `https://${scanBase}/tx/${tx.hash}`,
           result.symbol,
           "YES",
           result.selector ?? "",
@@ -38,18 +40,17 @@ async function processTx(tx) {
 
   // Sheet1: isTransferSender hoặc phát hiện token trong pair
   if (result.isTransferSender || result.pairTokenSymbols.length > 0) {
-    await append([buildRow(tx, result)], { sheet: "Sheet1" });
+    await append([buildRow(tx, result, { chain })], { sheet: "Sheet1" });
   }
 
   // TransferFromSheet: B.length > 0 và C == true (ecrecover trả về sender)
   if (result.isTransferFromErc20 && result.isEcrecoverSender) {
-    const now = new Date();
     await append(
       [
         [
           tx.hash,
-          `https://bscscan.com/address/${tx.to?.toLowerCase()}`,
-          `https://bscscan.com/tx/${tx.hash}`,
+          `https://${scanBase}/address/${tx.to?.toLowerCase()}`,
+          `https://${scanBase}/tx/${tx.hash}`,
           result.symbol,
           result.selector ?? "",
           tx.blockNumber,
