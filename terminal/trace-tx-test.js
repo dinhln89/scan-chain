@@ -70,6 +70,7 @@ async function main() {
 
   console.log("  isTransferSender   :", result.isTransferSender);
   console.log("  isTransferFromErc20:", result.isTransferFromErc20);
+  console.log("  isEcrecoverSender  :", result.isEcrecoverSender);
   console.log("  selector           :", result.selector ?? "");
   console.log("  symbol             :", result.symbol || "(none)");
   console.log("  inputCallAddrs     :", result.inputCallAddrs || "(none)");
@@ -93,6 +94,21 @@ async function main() {
       seen.add(key);
       console.log(`  token=${c.to}  wallet(pair)=${c.wallet}  parentSelector=${c.parentSelector ?? "(none)"}`);
     });
+  }
+
+  // Debug: scan trace tìm ecrecover precompile calls
+  {
+    const ECRECOVER = "0x0000000000000000000000000000000000000001";
+    const found = [];
+    function scanEcrecover(node) {
+      if (!node) return;
+      if (node.to?.toLowerCase() === ECRECOVER) found.push({ input: node.input, output: node.output });
+      (node.calls || []).forEach(scanEcrecover);
+    }
+    const rawTrace = await (require("../core/trace").rpc)("debug_traceTransaction", [tx.hash, { tracer: "callTracer" }]);
+    scanEcrecover(rawTrace);
+    console.log("\n[ecrecover precompile calls]", found.length > 0 ? "" : "(none)");
+    found.forEach((f, i) => console.log(`  [${i}] output=${f.output}`));
   }
 
   if (result.simulateResult) {
@@ -119,6 +135,20 @@ async function main() {
   if (result.isTransferSender) {
     console.log("[Sheet1 row]");
     console.log(" ", buildRow(tx, result, { chain }));
+  }
+
+  if (result.isTransferFromErc20 && result.isEcrecoverSender) {
+    const scanBase = chain === "ETH" ? "etherscan.io" : "bscscan.com";
+    console.log("[TransferFromSheet row]");
+    console.log(" ", [
+      tx.hash,
+      `https://${scanBase}/address/${tx.to?.toLowerCase()}`,
+      `https://${scanBase}/tx/${tx.hash}`,
+      result.symbol,
+      result.selector ?? "",
+      tx.blockNumber,
+      new Date().toLocaleString(),
+    ]);
   }
 
   console.log("=".repeat(60));
