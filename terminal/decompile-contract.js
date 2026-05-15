@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const https = require("https");
 const { execSync } = require("child_process");
-const { rpc } = require("../core/trace");
+const { rpc, setRpcHandler } = require("../core/trace");
 
 const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const TEMP_DIR = path.resolve(__dirname, "../.temp");
@@ -16,11 +16,30 @@ const GIGAHORSE_ROOT = path.resolve(process.env.HOME, ".gigahorse");
 const DOCKER_IMAGE = process.env.GIGAHORSE_IMAGE || "gigahorse-toolchain";
 const CONTAINER_ROOT = "/opt/gigahorse/gigahorse-toolchain";
 const TIMEOUT = process.env.DECOMPILE_TIMEOUT || 600;
-const BSC_CHAIN_ID = 56;
 const FOURBYTE_CACHE_FILE = path.resolve(__dirname, "../data/4byte-cache.json");
 
 const SHOW_SOURCE = process.argv.includes("--source");
 const SKIP_SOURCIFY = process.argv.includes("--no-sourcify");
+
+const CHAIN_CONFIGS = {
+  bsc: { chainId: 56,  rpc: process.env.BSC_RPC || "https://bsc-dataseed.binance.org" },
+  eth: { chainId: 1,   rpc: process.env.ETH_RPC || "https://eth-mainnet.nodereal.io/v1/23deb2fa6f2041158053ff943a2d1aa2" },
+};
+
+const TYPE_ARG = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
+const CHAIN = CHAIN_CONFIGS[TYPE_ARG] || CHAIN_CONFIGS.bsc;
+
+// Dùng RPC đúng chain cho proxy detection
+setRpcHandler(async (method, params) => {
+  const res = await fetch(CHAIN.rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  return json.result;
+});
 
 // --- 4byte cache ---
 let _4byteCache = null;
@@ -122,7 +141,7 @@ async function lookup4byte(selector) {
 }
 
 async function fetchSourcify(address) {
-  const url = `https://sourcify.dev/server/files/any/${BSC_CHAIN_ID}/0x${address.replace("0x", "")}`;
+  const url = `https://sourcify.dev/server/files/any/${CHAIN.chainId}/0x${address.replace("0x", "")}`;
   try {
     const { status, body } = await httpsGet(url);
     if (status !== 200) return null;
@@ -789,7 +808,7 @@ async function decompileContract(address) {
 async function main() {
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
   if (args.length === 0) {
-    console.error("Usage: node terminal/decompile-contract.js [--source] [--no-sourcify] <address> [address2] ...");
+    console.error("Usage: node terminal/decompile-contract.js [--type=bsc|eth] [--source] [--no-sourcify] <address> [address2] ...");
     process.exit(1);
   }
   for (const addr of args) {
