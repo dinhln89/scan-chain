@@ -4,6 +4,16 @@ require("dotenv").config({
 
 const sequelize = require("../db");
 
+// Import để đăng ký models với sequelize trước khi sync
+require("../models/Transaction");
+require("../models/Contract");
+require("../models/ContractDecompile");
+require("../models/Setting");
+require("../models/Token");
+require("../models/User");
+require("../models/FourByteSelector");
+require("../models/IgnoreAddress");
+
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 function withTimer(label) {
@@ -61,6 +71,11 @@ async function main() {
 
   done = withTimer(`CREATE DATABASE \`${dbName}\`...`);
   await sequelize.query(`CREATE DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+  done();
+
+  done = withTimer("Tao lai tables + indexes...");
+  await sequelize.query(`USE \`${dbName}\``);
+  await sequelize.sync();
   done();
 
   await sequelize.close();
