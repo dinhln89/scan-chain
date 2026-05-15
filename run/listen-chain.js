@@ -134,6 +134,7 @@ async function processBlock(chainKey, chain, web3, stats) {
       from: tx.from,
       to: tx.to || null,
       value: tx.value.toString(),
+      gas: tx.gas != null ? Number(tx.gas) : null,
       input: tx.input,
       selector,
       type: chainKey,

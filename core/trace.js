@@ -352,7 +352,9 @@ async function getErc20SymbolBatch(addresses) {
   if (needsLookup.length === 0) return symbols;
 
   try {
-    const rows = await Token.findAll({ where: { address: needsLookup.map((i) => addrs[i]) } });
+    const rows = await Token.findAll({
+      where: { address: needsLookup.map((i) => addrs[i]) },
+    });
     const dbMap = new Map(rows.map((r) => [r.address, r.symbol]));
     for (const i of needsLookup) {
       if (dbMap.has(addrs[i])) {
@@ -379,7 +381,11 @@ async function getErc20SymbolBatch(addresses) {
   }
 
   try {
-    await Promise.all(needsRpc.map((i) => Token.upsert({ address: addrs[i], symbol: symbols[i] })));
+    await Promise.all(
+      needsRpc.map((i) =>
+        Token.upsert({ address: addrs[i], symbol: symbols[i] }),
+      ),
+    );
   } catch {}
 
   return symbols;
@@ -413,8 +419,10 @@ async function analyzeTx(txHash, txData = null) {
     // if (hasSignatureInInput(txData.input)) throw new Error("IGNORED_SIGN");
     if (hasV3PathInInput(txData.input)) throw new Error("IGNORED_V3_PATH");
     const preAddrs = IgnoreAddress.getAll();
-    if (preAddrs.has(txData.from?.toLowerCase())) throw new Error("IGNORED_ADDRESS");
-    if (txData.to && preAddrs.has(txData.to.toLowerCase())) throw new Error("IGNORED_ADDRESS");
+    if (preAddrs.has(txData.from?.toLowerCase()))
+      throw new Error("IGNORED_ADDRESS");
+    if (txData.to && preAddrs.has(txData.to.toLowerCase()))
+      throw new Error("IGNORED_ADDRESS");
   }
 
   const [receipt, fetchedTx] = await Promise.all([
@@ -530,7 +538,7 @@ async function analyzeTx(txHash, txData = null) {
 
 const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
 
-async function simulateTx(to, input, blockNumber, txIndex) {
+async function simulateTx(to, input, blockNumber, txIndex, gas) {
   const block =
     blockNumber != null && txIndex != null
       ? {
@@ -542,12 +550,13 @@ async function simulateTx(to, input, blockNumber, txIndex) {
         : "latest";
   try {
     const result = await rpc("eth_call", [
-      { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: "0x5F5E100" },
+      { from: SIM_FROM, to, data: input, gasPrice: "0x0", gas: gas != null ? "0x" + Number(gas).toString(16) : "0x5F5E100" },
       block,
     ]);
     return { error: null, notRevert: true, result: result || null };
   } catch (err) {
-    if (!err.message?.toLowerCase().includes("revert")) {
+    const msg = err.message?.toLowerCase() ?? "";
+    if (!msg.includes("revert")) {
       sendMessage(`❌ simulateTx error\n<code>${to}</code>\n${err.message}`);
     }
     return { error: err.message, notRevert: false, result: null };

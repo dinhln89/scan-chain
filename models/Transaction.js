@@ -37,6 +37,10 @@ const Transaction = sequelize.define(
       type: DataTypes.TEXT("medium"),
       allowNull: true,
     },
+    gas: {
+      type: DataTypes.BIGINT,
+      allowNull: true,
+    },
     selector: {
       type: DataTypes.STRING(10),
       allowNull: true,

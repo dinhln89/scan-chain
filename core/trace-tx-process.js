@@ -205,6 +205,7 @@ async function processTxData(tx) {
           tx.input,
           tx.blockNumber,
           tx.transactionIndex ?? transactionIndex,
+          tx.gas,
         )
       : Promise.resolve(null),
     isTransferSender
