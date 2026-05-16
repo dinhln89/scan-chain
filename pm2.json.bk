@@ -6,7 +6,7 @@
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "4G",
-            "cron_restart": "*/40 * * * *"
+            "cron_restart": "0,40,20 * * * *"
         },
         {
             "name": "listen-old",
@@ -14,7 +14,7 @@
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "4G",
-            "cron_restart": "*/40 * * * *"
+            "cron_restart": "13,53,33 * * * *"
         },
         {
             "name": "trace-tx",
@@ -22,7 +22,7 @@
             "instances": 1,
             "autorestart": true,
             "max_memory_restart": "4G",
-            "cron_restart": "*/41 * * * *"
+            "cron_restart": "26,6,46 * * * *"
         }
     ]
 }
