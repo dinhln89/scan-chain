@@ -20,7 +20,7 @@ const log = createLogger(__filename);
 
 const OLD_BLOCK_KEY = (chainKey) => `old_block_${chainKey}`;
 const BATCH_SIZE = 3;
-const BATCH_DELAY_MS = 1000; // nhường RPC cho listen-chain
+const BATCH_DELAY_MS = 500; // nhường RPC cho listen-chain
 
 async function fetchAndSave(chainKey, chain, web3, blockNumber) {
   let block;
@@ -77,7 +77,7 @@ async function processBatch(chainKey, chain, web3, stats) {
   const newTarget = target - BigInt(blockNumbers.length);
   if (stats.fromBlock === null) stats.fromBlock = target.toString();
   stats.toBlock = newTarget.toString();
-  flushStats(stats, chain.label, log);
+  flushStats(stats, chain.label, log, "old");
 
   await Setting.set(settingKey, newTarget.toString());
   return true;

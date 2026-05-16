@@ -3,6 +3,7 @@ const Contract = require("../models/Contract");
 const IgnoreAddress = require("./ignore-address");
 const IgnoreMethod = require("./ignore-method");
 const { hasV3PathInInput, hasSignatureInInput } = require("./trace");
+const statsStore = require("./stats-store");
 
 const CHAIN_CONFIGS = {
   bsc: {
@@ -98,10 +99,11 @@ function makeStats() {
   return { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
 }
 
-function flushStats(stats, label, log) {
+function flushStats(stats, label, log, type = null) {
   const now = Date.now();
   if (now - stats.lastLog >= 5000 && stats.blocks > 0) {
     log.info(`[${label}] Block ${stats.fromBlock}-${stats.toBlock} | ${stats.filtered}/${stats.total} tx saved`);
+    if (type) statsStore.increment(type, stats.blocks).catch(() => {});
     stats.blocks = 0;
     stats.filtered = 0;
     stats.total = 0;
