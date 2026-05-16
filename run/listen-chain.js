@@ -4,7 +4,7 @@ const Setting = require("../models/Setting");
 const IgnoreAddress = require("../core/ignore-address");
 const IgnoreMethod = require("../core/ignore-method");
 const { syncIgnoreSwap } = require("../core/trace");
-const { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats } = require("../core/chain-block");
+const { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats, warmSelectorCache } = require("../core/chain-block");
 const { saveHistorySnapshot } = require("../core/stats-store");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
@@ -102,11 +102,12 @@ async function main() {
   await IgnoreMethod.syncFromSheet();
   syncIgnoreSwap();
 
+  await warmSelectorCache();
+
   for (const [chainKey, chain] of Object.entries(CHAIN_CONFIGS)) {
     startChainLoop(chainKey, chain);
   }
 
-  await saveHistorySnapshot();
   scheduleDailySnapshot();
 }
 
