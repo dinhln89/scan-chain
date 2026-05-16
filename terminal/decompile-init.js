@@ -18,6 +18,22 @@ const DECOMPILE_DIR = path.resolve(__dirname, "../decompile");
 const FOURBYTE_CACHE = path.resolve(__dirname, "../data/4byte-cache.json");
 const INIT_RE = /^(?:init|initialize|initialise|setup|setUp)/i;
 
+// ── DB lazy init ──────────────────────────────────────────────────────────────
+
+let _db = null;
+async function getDb() {
+  if (_db !== undefined) return _db;
+  try {
+    const sequelize = require("../db");
+    await sequelize.ensureDatabase();
+    _db = require("../models/FourByteSelector");
+    await _db.sync();
+  } catch {
+    _db = null;
+  }
+  return _db;
+}
+
 // ── EIP-1967 proxy detection ──────────────────────────────────────────────────
 
 const EIP1967_SLOTS = [
@@ -73,6 +89,30 @@ function httpsGet(url) {
 
 async function lookup4byte(sel, cache) {
   if (sel in cache) return cache[sel];
+
+  const model = await getDb();
+
+  // 1. DB
+  if (model) {
+    try {
+      const row = await model.findByPk(sel);
+      if (row) { cache[sel] = row.signature; return row.signature; }
+    } catch {}
+  }
+
+  // 2. JSON file cache (migrate sang DB nếu tìm thấy)
+  const jsonCache = load4byteCache();
+  if (sel in jsonCache) {
+    const sig = jsonCache[sel];
+    if (sig && model) {
+      try { await model.upsert({ selector: sel, signature: sig }); } catch {}
+    }
+    cache[sel] = sig;
+    return sig;
+  }
+
+  // 3. 4byte API
+  let sig = null;
   try {
     const { status, body } = await httpsGet(
       `https://www.4byte.directory/api/v1/signatures/?hex_signature=${sel}`,
@@ -81,13 +121,16 @@ async function lookup4byte(sel, cache) {
       const { results } = JSON.parse(body);
       if (results && results.length > 0) {
         results.sort((a, b) => a.id - b.id);
-        cache[sel] = results[0].text_signature;
-        return cache[sel];
+        sig = results[0].text_signature;
       }
     }
   } catch {}
-  cache[sel] = null;
-  return null;
+
+  if (sig && model) {
+    try { await model.upsert({ selector: sel, signature: sig }); } catch {}
+  }
+  cache[sel] = sig;
+  return sig;
 }
 
 // ── Dasm-based init lookup ────────────────────────────────────────────────────

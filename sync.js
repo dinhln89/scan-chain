@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const sequelize = require('./db');
 const { createLogger } = require('./core/logger');
 
@@ -114,6 +116,25 @@ async function main() {
   } else {
     process.stdout.write('[7/7] Cột chain đã tồn tại, bỏ qua\n');
     log.info('Cot chain da ton tai, bo qua');
+  }
+
+  const FOURBYTE_CACHE = path.resolve(__dirname, 'data/4byte-cache.json');
+  if (fs.existsSync(FOURBYTE_CACHE)) {
+    const FourByteSelector = require('./models/FourByteSelector');
+    await FourByteSelector.sync();
+    const raw = JSON.parse(fs.readFileSync(FOURBYTE_CACHE, 'utf8'));
+    const rows = Object.entries(raw)
+      .filter(([, sig]) => sig !== null)
+      .map(([selector, signature]) => ({ selector, signature }));
+    if (rows.length > 0) {
+      done = withTimer(`[8/8] Import ${rows.length} entries tu 4byte-cache.json...`);
+      await FourByteSelector.bulkCreate(rows, { ignoreDuplicates: true });
+      done();
+    } else {
+      process.stdout.write('[8/8] 4byte-cache.json trống, bỏ qua\n');
+    }
+  } else {
+    process.stdout.write('[8/8] Không tìm thấy 4byte-cache.json, bỏ qua\n');
   }
 
   process.stdout.write('Hoàn tất!\n');
