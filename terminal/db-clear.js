@@ -13,6 +13,7 @@ require("../models/Token");
 require("../models/User");
 require("../models/FourByteSelector");
 require("../models/IgnoreAddress");
+require("../models/History");
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
