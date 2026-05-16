@@ -8,6 +8,7 @@ const Proxy = sequelize.define(
     proxy: { type: DataTypes.STRING(42), allowNull: false },
     implementation: { type: DataTypes.STRING(42), allowNull: false },
     chain: { type: DataTypes.STRING(10), allowNull: false },
+    decompileInitDone: { type: DataTypes.BOOLEAN, defaultValue: false },
   },
   {
     tableName: "proxies",
