@@ -97,12 +97,14 @@ async function main() {
     });
   }
 
-  // Proxy: DELEGATECALL trong trace
-  console.log("\n[delegateCalls / Proxy]", result.delegateCalls.length > 0 ? "" : "(none)");
-  result.delegateCalls.forEach((dc, i) => {
+  // Proxy: DELEGATECALL có selector trùng với top-level tx
+  const proxySelector = tx.input.slice(0, 10).toLowerCase();
+  const matchedDelegateCalls = result.delegateCalls.filter((dc) => dc.selector === proxySelector);
+  console.log("\n[delegateCalls / Proxy]", matchedDelegateCalls.length > 0 ? "" : "(none)");
+  matchedDelegateCalls.forEach((dc, i) => {
     console.log(`  [${i}] proxy          : ${dc.proxy}`);
     console.log(`       implementation : ${dc.implementation}`);
-    console.log(`       selector       : ${dc.selector ?? "(none)"}`);
+    console.log(`       selector       : ${dc.selector}`);
   });
 
   // Debug: scan trace tìm ecrecover precompile calls
@@ -119,6 +121,19 @@ async function main() {
     scanEcrecover(rawTrace);
     console.log("\n[ecrecover precompile calls]", found.length > 0 ? "" : "(none)");
     found.forEach((f, i) => console.log(`  [${i}] output=${f.output}`));
+
+    // Debug raw DELEGATECALL nodes trong trace
+    const dcRaw = [];
+    function scanDelegateCalls(node, parentTo = null) {
+      if (!node) return;
+      if (node.type?.toUpperCase() === "DELEGATECALL") {
+        dcRaw.push({ from: node.from || parentTo, to: node.to, sel: node.input?.slice(0, 10) });
+      }
+      (node.calls || []).forEach((c) => scanDelegateCalls(c, node.to || parentTo));
+    }
+    scanDelegateCalls(rawTrace);
+    console.log("\n[raw DELEGATECALL nodes]", dcRaw.length > 0 ? "" : "(none)");
+    if (dcRaw.length > 0) console.log(JSON.stringify(dcRaw, null, 2));
   }
 
   if (result.simulateResult) {
@@ -165,9 +180,9 @@ async function main() {
     ]);
   }
 
-  if (result.delegateCalls.length > 0) {
+  if (matchedDelegateCalls.length > 0) {
     console.log("[Proxy inserts]");
-    result.delegateCalls.forEach((dc) => {
+    matchedDelegateCalls.forEach((dc) => {
       console.log(" ", { proxy: dc.proxy, implementation: dc.implementation, chain: chain.toLowerCase() });
     });
   }

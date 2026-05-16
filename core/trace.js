@@ -567,13 +567,14 @@ async function simulateTx(to, input, blockNumber, txIndex, gas) {
 
 // Tìm tất cả DELEGATECALL trong cây trace. Mỗi entry: { proxy, implementation, selector }.
 // Dedup theo cặp (proxy, implementation).
-function extractDelegateCalls(node, results = [], seen = new Set()) {
+// parentTo: fallback cho `from` khi RPC provider bỏ qua field này trên sub-calls
+function extractDelegateCalls(node, results = [], seen = new Set(), parentTo = null) {
   if (!node) return results;
-  if (node.type?.toUpperCase() === "DELEGATECALL" && node.from && node.to) {
-    const proxy = node.from.toLowerCase();
+  if (node.type?.toUpperCase() === "DELEGATECALL" && node.to) {
+    const proxy = (node.from || parentTo || "").toLowerCase();
     const impl = node.to.toLowerCase();
     const key = `${proxy}:${impl}`;
-    if (!seen.has(key)) {
+    if (proxy && !seen.has(key)) {
       seen.add(key);
       results.push({
         proxy,
@@ -583,7 +584,7 @@ function extractDelegateCalls(node, results = [], seen = new Set()) {
     }
   }
   for (const child of node.calls || []) {
-    extractDelegateCalls(child, results, seen);
+    extractDelegateCalls(child, results, seen, node.to || parentTo);
   }
   return results;
 }
