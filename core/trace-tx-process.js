@@ -365,7 +365,8 @@ function buildRow(tx, result, { includeSimulate = false, chain = "BSC" } = {}) {
         : "",
     );
   }
-  row.push(result.selector ?? "", tx.blockNumber, now.toLocaleString());
+  const sameFromTo = tx.from?.toLowerCase() === tx.to?.toLowerCase() ? "YES" : "";
+  row.push(sameFromTo, result.selector ?? "", tx.blockNumber, now.toLocaleString());
   return row;
 }
 
