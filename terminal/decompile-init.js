@@ -43,6 +43,10 @@ const EIP1967_SLOTS = [
 ];
 
 async function rpcCall(method, params) {
+  const paramStr = params.map((p) =>
+    typeof p === "object" ? JSON.stringify(p) : p
+  ).join(", ");
+  console.log(`  [rpc] ${method}(${paramStr})`);
   const res = await fetch(RPC_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -159,6 +163,57 @@ async function findInitFromDasm(dasmFile) {
   }
   save4byteCache(cache);
   return initFns;
+}
+
+// ── Fake ABI calldata encoding ────────────────────────────────────────────────
+
+function parseParamTypes(sig) {
+  const inner = sig.slice(sig.indexOf("(") + 1, sig.lastIndexOf(")"));
+  if (!inner) return [];
+  return inner.split(",").map((t) => t.trim()).filter(Boolean);
+}
+
+function isDynamic(type) {
+  return type === "bytes" || type === "string" || type.endsWith("[]");
+}
+
+function fakeStaticWord(type) {
+  if (type === "address")                 return "0000000000000000000000000000000000000000000000000000000000000001";
+  if (type.startsWith("uint"))            return "0000000000000000000000000000000000000000000000000000000000000001";
+  if (type.startsWith("int"))             return "0000000000000000000000000000000000000000000000000000000000000001";
+  if (type === "bool")                    return "0000000000000000000000000000000000000000000000000000000000000000";
+  if (/^bytes\d+$/.test(type))            return "0000000000000000000000000000000000000000000000000000000000000000";
+  return                                         "0000000000000000000000000000000000000000000000000000000000000000";
+}
+
+// Tạo calldata = selector + ABI-encoded fake params theo signature
+function encodeFakeCalldata(sel, sig) {
+  const types = parseParamTypes(sig);
+  if (types.length === 0) return sel;
+
+  const head = [];
+  const tail = [];
+  let tailOffset = types.length * 32;
+
+  for (const type of types) {
+    if (isDynamic(type)) {
+      head.push(tailOffset.toString(16).padStart(64, "0"));
+      tail.push("0000000000000000000000000000000000000000000000000000000000000000"); // length=0
+      tailOffset += 32;
+    } else {
+      head.push(fakeStaticWord(type));
+    }
+  }
+
+  if (types.length > 0) {
+    console.log(`  [fake params] ${sig}`);
+    types.forEach((t, i) => {
+      const word = isDynamic(t) ? `(offset → empty ${t})` : `0x${head[i]}`;
+      console.log(`    [${i}] ${t} = ${word}`);
+    });
+  }
+
+  return sel + head.join("") + tail.join("");
 }
 
 // ── eth_call check ────────────────────────────────────────────────────────────
