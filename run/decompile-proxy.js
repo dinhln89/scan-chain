@@ -194,6 +194,33 @@ function decompileViaSubprocess(chain, address) {
   return initFns;
 }
 
+// ── Decompile cache keyed by implementation address ───────────────────────────
+// Value: { source: 'dasm'|'subprocess', fns: Array<{sel,sig}> }
+
+const _decompileCache = new Map();
+
+async function getInitFns(chain, implementation) {
+  if (_decompileCache.has(implementation)) {
+    return _decompileCache.get(implementation);
+  }
+
+  const contractName = `contract_${implementation.slice(2, 10)}`;
+  const dasmFile = path.join(DECOMPILE_DIR, ".temp", contractName, "contract.dasm");
+
+  let entry;
+  if (fs.existsSync(dasmFile)) {
+    const fns = await findInitFromDasm(dasmFile);
+    entry = { source: "dasm", fns };
+  } else {
+    const sigs = decompileViaSubprocess(chain, implementation);
+    entry = { source: "subprocess", fns: sigs.map((sig) => ({ sel: "", sig })) };
+  }
+
+  _decompileCache.set(implementation, entry);
+  log.info(`  decompile cache miss: ${implementation} (${entry.source}, ${entry.fns.length} init fns)`);
+  return entry;
+}
+
 // ── Process one proxy record ──────────────────────────────────────────────────
 
 async function processProxy(record) {
@@ -202,29 +229,20 @@ async function processProxy(record) {
 
   log.info(`[${chain}] ${proxy} → ${implementation}`);
 
-  const contractName = `contract_${implementation.slice(2, 10)}`;
-  const dasmFile = path.join(DECOMPILE_DIR, ".temp", contractName, "contract.dasm");
+  const { source, fns } = await getInitFns(chain, implementation);
 
   let rows = [];
 
-  if (fs.existsSync(dasmFile)) {
-    const initFns = await findInitFromDasm(dasmFile);
-    if (initFns.length === 0) {
-      rows.push(buildRow(chain, proxy, implementation, explorerFn, "(none)", "-", ""));
-    } else {
-      for (const { sel, sig } of initFns) {
+  if (fns.length === 0) {
+    rows.push(buildRow(chain, proxy, implementation, explorerFn, "(none)", "-", ""));
+  } else {
+    for (const { sel, sig } of fns) {
+      if (source === "dasm" && sel) {
         const check = await checkInitCallable(chain, proxy, sel);
         const callable = check.callable ? "YES" : `NO: ${check.reason}`;
         rows.push(buildRow(chain, proxy, implementation, explorerFn, sig, callable, sel));
-      }
-    }
-  } else {
-    const sigs = decompileViaSubprocess(chain, implementation);
-    if (sigs.length === 0) {
-      rows.push(buildRow(chain, proxy, implementation, explorerFn, "(none)", "-", ""));
-    } else {
-      for (const sig of sigs) {
-        rows.push(buildRow(chain, proxy, implementation, explorerFn, sig, "?", ""));
+      } else {
+        rows.push(buildRow(chain, proxy, implementation, explorerFn, sig, "?", sel));
       }
     }
   }
