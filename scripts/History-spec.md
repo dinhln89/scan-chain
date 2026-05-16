@@ -1,0 +1,2 @@
+- Tự động chạy hàng ngày trong listen-chain để lưu số block đã scan được mỗi ngày theo từng chain, lưu vào History model.
+- Khi chạy node terminal/stats.js thì cũng hiển thị chi tiết 7 ngày gần nhất, tính toán số % mỗi ngày.

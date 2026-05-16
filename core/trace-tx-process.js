@@ -118,12 +118,13 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
   const notFromTrace = balanceOfWallets.filter((a) => !getReservesAddrs.has(a));
   let rows = [];
   try {
-    rows = notFromTrace.length > 0
-      ? await Contract.findAll({
-          where: { address: notFromTrace },
-          attributes: ["address", "isPair"],
-        })
-      : [];
+    rows =
+      notFromTrace.length > 0
+        ? await Contract.findAll({
+            where: { address: notFromTrace },
+            attributes: ["address", "isPair"],
+          })
+        : [];
   } catch {
     // DB không khả dụng → bỏ qua, xử lý tất cả qua RPC
   }
@@ -143,7 +144,11 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
     try {
       await Promise.all(
         unknown.map((addr, i) => {
-          const isPair = !!(results[i] && results[i] !== "0x" && results[i].length >= 194);
+          const isPair = !!(
+            results[i] &&
+            results[i] !== "0x" &&
+            results[i].length >= 194
+          );
           return Contract.upsert({ address: addr, isPair });
         }),
       );
@@ -219,7 +224,12 @@ async function processTxData(tx) {
   // Bước 1: balanceOf calls đến swapPair → ứng viên token
   const swapPairBalanceOfs = new Set(
     calls
-      .filter((c) => c.fn === "balanceOf(address)" && c.wallet && pairSet.has(c.wallet.toLowerCase()))
+      .filter(
+        (c) =>
+          c.fn === "balanceOf(address)" &&
+          c.wallet &&
+          pairSet.has(c.wallet.toLowerCase()),
+      )
       .map((c) => c.to?.toLowerCase())
       .filter(Boolean),
   );
@@ -324,8 +334,10 @@ async function processTxData(tx) {
   ];
   const allSymbols = await getErc20SymbolBatch(symbolAddrs);
   const symbolOffset = firstToSender ? 1 : 0;
-  const symbol = firstToSender ? (allSymbols[0] || "") : "";
-  const pairTokenSymbols = tokenAddrsOnPairs.map((addr, i) => allSymbols[symbolOffset + i] || addr);
+  const symbol = firstToSender ? allSymbols[0] || "" : "";
+  const pairTokenSymbols = tokenAddrsOnPairs.map(
+    (addr, i) => allSymbols[symbolOffset + i] || addr,
+  );
 
   return {
     calls,
@@ -365,8 +377,14 @@ function buildRow(tx, result, { includeSimulate = false, chain = "BSC" } = {}) {
         : "",
     );
   }
-  const sameFromTo = tx.from?.toLowerCase() === tx.to?.toLowerCase() ? "YES" : "";
-  row.push(sameFromTo, result.selector ?? "", tx.blockNumber, now.toLocaleString());
+  const sameFromTo =
+    tx.from?.toLowerCase() === tx.to?.toLowerCase() ? "SAME_FROM" : "";
+  row.push(
+    sameFromTo,
+    result.selector ?? "",
+    tx.blockNumber,
+    now.toLocaleString(),
+  );
   return row;
 }
 
