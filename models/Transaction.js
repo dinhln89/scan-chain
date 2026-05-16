@@ -64,7 +64,7 @@ const Transaction = sequelize.define(
       { fields: ["from"] },
       { fields: ["to"] },
       { fields: ["processed", "blockNumber", "id"] },
-      { fields: ["selector", "to"] },
+      { fields: ["selector", "to", "type"], name: "transactions_selector_to_type" },
     ],
   },
 );

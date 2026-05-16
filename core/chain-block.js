@@ -76,14 +76,18 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
   }));
 
   // Forward crawl: 1 batch query để loại selector+to+type đã tồn tại
+  // Row constructor (selector,to,type) IN (...) dùng covering index, nhanh hơn Op.or
   let candidates = allData;
   if (skipIfSelectorExists) {
-    const checks = allData.filter((t) => t.to).map((t) => ({ selector: t.selector, to: t.to, type: chainKey }));
+    const checks = allData.filter((t) => t.to);
     if (checks.length > 0) {
-      const existing = await Transaction.findAll({
-        where: { [Op.or]: checks },
-        attributes: ["selector", "to", "type"],
-      });
+      const tuples = checks
+        .map((t) => `(${sequelize.escape(t.selector)},${sequelize.escape(t.to)},${sequelize.escape(chainKey)})`)
+        .join(",");
+      const existing = await sequelize.query(
+        `SELECT selector, \`to\`, type FROM transactions WHERE (selector, \`to\`, type) IN (${tuples})`,
+        { type: sequelize.QueryTypes.SELECT },
+      );
       const seen = new Set(existing.map((e) => `${e.selector}:${e.to}:${e.type}`));
       candidates = allData.filter((t) => !t.to || !seen.has(`${t.selector}:${t.to}:${chainKey}`));
     }
