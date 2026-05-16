@@ -231,7 +231,8 @@ async function processProxy(record) {
 
   await append(rows, { sheet: SHEET_NAME });
   await record.update({ decompileInitDone: true });
-  log.info(`  → inserted ${rows.length} row(s) into ${SHEET_NAME}`);
+  const initSummary = rows.map((r) => r[4]).filter((s) => s !== "(none)").join(", ") || "(none)";
+  log.info(`DONE [${chain}] ${proxy} | impl=${implementation} | init=${initSummary}`);
 }
 
 function buildRow(chain, proxy, impl, explorerFn, initSig, callable, selector) {
