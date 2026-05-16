@@ -230,10 +230,10 @@ async function readStorageSlots(addr, slots = ["0x0", "0x1", "0x2"]) {
 }
 
 // Dùng debug_traceCall để xem SSTORE operations nếu RPC hỗ trợ
-async function traceCallSstores(contractAddress, sel) {
+async function traceCallSstores(contractAddress, calldata) {
   try {
     const trace = await rpcCall("debug_traceCall", [
-      { from: SIM_FROM, to: contractAddress, data: sel },
+      { from: SIM_FROM, to: contractAddress, data: calldata },
       "latest",
       { tracer: "prestateTracer", tracerConfig: { diffMode: true } },
     ]);
@@ -245,7 +245,9 @@ async function traceCallSstores(contractAddress, sel) {
   }
 }
 
-async function checkInitCallable(contractAddress, sel) {
+async function checkInitCallable(contractAddress, sel, sig) {
+  const calldata = encodeFakeCalldata(sel, sig);
+
   // 1. Đọc storage trước
   const before = await readStorageSlots(contractAddress);
 
@@ -253,7 +255,7 @@ async function checkInitCallable(contractAddress, sel) {
   let callResult;
   try {
     const result = await rpcCall("eth_call", [
-      { from: SIM_FROM, to: contractAddress, data: sel },
+      { from: SIM_FROM, to: contractAddress, data: calldata },
       "latest",
     ]);
     if (!result || result === "0x") {
@@ -282,7 +284,7 @@ async function checkInitCallable(contractAddress, sel) {
 
   // 4. Nếu callable → thêm trace để xem SSTORE nào sẽ bị ghi
   if (callResult.callable) {
-    const sstores = await traceCallSstores(contractAddress, sel);
+    const sstores = await traceCallSstores(contractAddress, calldata);
     callResult.wouldWrite = sstores; // null nếu RPC không hỗ trợ, [] nếu không có SSTORE
   }
 
@@ -345,7 +347,7 @@ async function processAddress(address) {
     } else {
       console.log(`  // One-time init (${initFns.length}):`);
       for (const { sel, sig } of initFns) {
-        const check = await checkInitCallable(address, sel);
+        const check = await checkInitCallable(address, sel, sig);
         const status = check.callable ? "✓ CALLABLE" : `✗ ${check.reason}`;
         console.log(`  // function external ${sig}  [${status}]`);
         console.log(`     state changed (eth_call): ${check.stateChanged}`);
