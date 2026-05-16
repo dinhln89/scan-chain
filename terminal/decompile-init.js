@@ -166,32 +166,72 @@ async function findInitFromDasm(dasmFile) {
 const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
 const ERROR_SELECTOR = "0x08c379a0"; // Error(string)
 
+// Đọc các storage slots quan trọng (initialized flag thường ở slot 0)
+async function readStorageSlots(addr, slots = ["0x0", "0x1", "0x2"]) {
+  const results = await Promise.all(
+    slots.map((slot) => rpcCall("eth_getStorageAt", [addr, slot, "latest"]).catch(() => null)),
+  );
+  return Object.fromEntries(slots.map((s, i) => [s, results[i]]));
+}
+
+// Dùng debug_traceCall để xem SSTORE operations nếu RPC hỗ trợ
+async function traceCallSstores(contractAddress, sel) {
+  try {
+    const trace = await rpcCall("debug_traceCall", [
+      { from: SIM_FROM, to: contractAddress, data: sel },
+      "latest",
+      { tracer: "prestateTracer", tracerConfig: { diffMode: true } },
+    ]);
+    // diffMode trả về { pre: {...}, post: {...} } — diff = storage thay đổi
+    const post = trace?.post?.[contractAddress.toLowerCase()]?.storage;
+    return post ? Object.keys(post) : [];
+  } catch {
+    return null; // RPC không hỗ trợ debug_traceCall
+  }
+}
+
 async function checkInitCallable(contractAddress, sel) {
+  // 1. Đọc storage trước
+  const before = await readStorageSlots(contractAddress);
+
+  // 2. eth_call simulation
+  let callResult;
   try {
     const result = await rpcCall("eth_call", [
       { from: SIM_FROM, to: contractAddress, data: sel },
       "latest",
     ]);
-    // Revert trả về Error(string) hoặc "0x"
-    if (!result || result === "0x") return { callable: false, reason: "revert (no data)" };
-    if (result.startsWith(ERROR_SELECTOR)) {
-      // Decode revert reason string (ABI: offset 4 + 32 + 32 + data)
+    if (!result || result === "0x") {
+      callResult = { callable: false, reason: "revert (no data)" };
+    } else if (result.startsWith(ERROR_SELECTOR)) {
       try {
-        const hex = result.slice(10); // bỏ selector
-        const offset = parseInt(hex.slice(0, 64), 16) * 2;
+        const hex = result.slice(10);
         const len = parseInt(hex.slice(64, 128), 16) * 2;
         const reason = Buffer.from(hex.slice(128, 128 + len), "hex").toString("utf8");
-        return { callable: false, reason };
+        callResult = { callable: false, reason };
       } catch {
-        return { callable: false, reason: "revert" };
+        callResult = { callable: false, reason: "revert" };
       }
+    } else {
+      callResult = { callable: true };
     }
-    return { callable: true, result };
   } catch (err) {
-    const msg = err.message || "";
-    const reason = msg.includes(":") ? msg.split(":").slice(1).join(":").trim() : msg;
-    return { callable: false, reason };
+    const msg = (err.message || "").replace(/\s*:?\s*0x[0-9a-f]+$/i, "").trim();
+    callResult = { callable: false, reason: msg };
   }
+
+  // 3. Đọc storage sau — eth_call không thay đổi state thật
+  const after = await readStorageSlots(contractAddress);
+  const stateChanged = JSON.stringify(before) !== JSON.stringify(after);
+  callResult.stateChanged = stateChanged;
+
+  // 4. Nếu callable → thêm trace để xem SSTORE nào sẽ bị ghi
+  if (callResult.callable) {
+    const sstores = await traceCallSstores(contractAddress, sel);
+    callResult.wouldWrite = sstores; // null nếu RPC không hỗ trợ, [] nếu không có SSTORE
+  }
+
+  return callResult;
 }
 
 // ── Fallback: decompile-contract.js subprocess ───────────────────────────────
@@ -253,6 +293,16 @@ async function processAddress(address) {
         const check = await checkInitCallable(address, sel);
         const status = check.callable ? "✓ CALLABLE" : `✗ ${check.reason}`;
         console.log(`  // function external ${sig}  [${status}]`);
+        console.log(`     state changed (eth_call): ${check.stateChanged}`);
+        if (check.callable) {
+          if (check.wouldWrite === null) {
+            console.log(`     would write slots   : (debug_traceCall not supported)`);
+          } else if (check.wouldWrite.length === 0) {
+            console.log(`     would write slots   : (none)`);
+          } else {
+            console.log(`     would write slots   : ${check.wouldWrite.join(", ")}`);
+          }
+        }
       }
     }
   } else {
