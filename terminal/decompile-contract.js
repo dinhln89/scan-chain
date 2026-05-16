@@ -583,6 +583,41 @@ function printCached(row) {
   }
 }
 
+const INIT_NAME_RE_FALLBACK = /^(?:init|initialize|initialise|setup|setUp)/i;
+
+function extractSelectorsFromDasm(dasmFile) {
+  if (!fs.existsSync(dasmFile)) return [];
+  const content = fs.readFileSync(dasmFile, "utf8");
+  const sels = new Set();
+  for (const m of content.matchAll(/PUSH4\s+(0x[0-9a-f]{8})\b/gi)) {
+    const s = m[1].toLowerCase();
+    if (s !== "0xffffffff") sels.add(s);
+  }
+  return [...sels];
+}
+
+async function fallbackDasmInit(dasmFile, address) {
+  const selectors = extractSelectorsFromDasm(dasmFile);
+  if (selectors.length === 0) { console.log("(khong co dasm de fallback)"); return; }
+
+  console.log(`\nFallback: lookup ${selectors.length} selectors tu dasm...`);
+  const initFns = [];
+  // Sequential để tránh throttle 4byte API
+  for (const sel of selectors) {
+    const sig = await lookup4byte(sel);
+    if (sig && INIT_NAME_RE_FALLBACK.test(sig.split("(")[0])) {
+      initFns.push({ sel, sig });
+    }
+  }
+
+  if (initFns.length === 0) {
+    console.log("// (khong tim thay init function qua selector lookup)");
+    return;
+  }
+  console.log(`\n// One-time init (${initFns.length}) [dasm fallback]:`);
+  initFns.forEach(({ sig }) => console.log(`// function external ${sig}`));
+}
+
 async function decompileContract(address) {
   address = address.toLowerCase();
   const name = `contract_${address.slice(2, 10)}`;
@@ -740,7 +775,8 @@ async function decompileContract(address) {
       ].join(" ");
       execSync(cmd, { stdio: "inherit", cwd: DECOMPILE_DIR });
     } catch {
-      console.error("gigahorse thất bại");
+      console.error("gigahorse thất bại — fallback sang dasm selector lookup");
+      await fallbackDasmInit(path.join(DECOMPILE_DIR, ".temp", name, "contract.dasm"), address);
       return;
     }
 

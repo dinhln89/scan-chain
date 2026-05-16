@@ -58,6 +58,7 @@ function decompileAndShowInit(address) {
   if (DEBUG) { console.log("[raw output]\n" + (output || "(empty)")); }
 
   const lines = output.split("\n");
+  // 1. Block "One-time init" (gigahorse/sourcify đã classify đúng)
   const initLines = [];
   let inInit = false;
   for (const line of lines) {
@@ -66,6 +67,13 @@ function decompileAndShowInit(address) {
       if (line.startsWith("// function ") || line.startsWith("//   ")) initLines.push(line.trim());
       else break;
     }
+  }
+  // 2. Fallback: tìm bất kỳ dòng function nào có tên dạng init (dù nằm ở group khác)
+  const INIT_RE = /^\/\/ function (?:external\s+)?(?:init|initialize|initialise|setup|setUp)/i;
+  const extraLines = lines.filter((l) => INIT_RE.test(l.trim()) && !initLines.includes(l.trim()));
+  if (extraLines.length > 0) {
+    if (initLines.length === 0) initLines.push("// (found via name search):");
+    extraLines.forEach((l) => initLines.push(l.trim()));
   }
 
   if (initLines.length === 0) {
