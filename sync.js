@@ -141,14 +141,14 @@ async function main() {
       .filter(([, sig]) => sig !== null)
       .map(([selector, signature]) => ({ selector, signature }));
     if (rows.length > 0) {
-      done = withTimer(`[8/8] Import ${rows.length} entries tu 4byte-cache.json...`);
+      done = withTimer(`[9/9] Import ${rows.length} entries tu 4byte-cache.json...`);
       await FourByteSelector.bulkCreate(rows, { ignoreDuplicates: true });
       done();
     } else {
-      process.stdout.write('[8/8] 4byte-cache.json trống, bỏ qua\n');
+      process.stdout.write('[9/9] 4byte-cache.json trống, bỏ qua\n');
     }
   } else {
-    process.stdout.write('[8/8] Không tìm thấy 4byte-cache.json, bỏ qua\n');
+    process.stdout.write('[9/9] Không tìm thấy 4byte-cache.json, bỏ qua\n');
   }
 
   process.stdout.write('Hoàn tất!\n');

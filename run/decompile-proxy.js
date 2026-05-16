@@ -267,7 +267,7 @@ async function loop() {
 
 async function main() {
   await sequelize.authenticate();
-  await Proxy.sync({ alter: true });
+  await Proxy.sync();
   log.info(`decompile-proxy started (delay=${DELAY_MS}ms, sheet=${SHEET_NAME})`);
   loop();
 }
