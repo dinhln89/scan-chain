@@ -1,5 +1,5 @@
 const sequelize = require("../db");
-const { readAll, readHistory } = require("../core/stats-store");
+const { readAll, readHistory, saveHistorySnapshot } = require("../core/stats-store");
 
 function n(val, w = 13) {
   if (val == null) return "N/A".padStart(w);
@@ -52,6 +52,7 @@ async function render() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await saveHistorySnapshot().catch(() => {});
 
   const loop = async () => {
     try {

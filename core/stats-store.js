@@ -1,6 +1,7 @@
 const { Op } = require("sequelize");
 const Setting = require("../models/Setting");
 const History = require("../models/History");
+const { CHAIN_CONFIGS } = require("./chain-block");
 
 async function readAll() {
   const chains = ["bsc", "eth"];
@@ -56,4 +57,19 @@ async function readHistory(days = 7) {
   });
 }
 
-module.exports = { readAll, readHistory };
+async function saveHistorySnapshot() {
+  const today = new Date().toISOString().slice(0, 10);
+  for (const [chainKey, chain] of Object.entries(CHAIN_CONFIGS)) {
+    const [latestStr, oldStr, headStr] = await Promise.all([
+      Setting.get(chain.settingKey),
+      Setting.get(`old_block_${chainKey}`),
+      Setting.get(`chain_head_${chainKey}`),
+    ]);
+    if (!latestStr || !oldStr || !headStr) continue;
+    const scanned = parseInt(latestStr, 10) - parseInt(oldStr, 10);
+    const chainHead = parseInt(headStr, 10);
+    await History.upsert({ date: today, chain: chainKey, scanned, chainHead });
+  }
+}
+
+module.exports = { readAll, readHistory, saveHistorySnapshot };

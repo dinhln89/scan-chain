@@ -5,7 +5,7 @@ const IgnoreAddress = require("../core/ignore-address");
 const IgnoreMethod = require("../core/ignore-method");
 const { syncIgnoreSwap } = require("../core/trace");
 const { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats } = require("../core/chain-block");
-const History = require("../models/History");
+const { saveHistorySnapshot } = require("../core/stats-store");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({ path: require("path").resolve(__dirname, "../.env") });
 
@@ -79,22 +79,6 @@ function startChainLoop(chainKey, chain) {
   loop();
 }
 
-async function saveHistorySnapshot() {
-  const today = new Date().toISOString().slice(0, 10);
-  for (const [chainKey, chain] of Object.entries(CHAIN_CONFIGS)) {
-    const [latestStr, oldStr, headStr] = await Promise.all([
-      Setting.get(chain.settingKey),
-      Setting.get(`old_block_${chainKey}`),
-      Setting.get(`chain_head_${chainKey}`),
-    ]);
-    if (!latestStr || !oldStr || !headStr) continue;
-    const scanned = parseInt(latestStr, 10) - parseInt(oldStr, 10);
-    const chainHead = parseInt(headStr, 10);
-    await History.upsert({ date: today, chain: chainKey, scanned, chainHead });
-    log.info(`[${chain.label}] History ${today}: scanned=${scanned.toLocaleString()} chainHead=${chainHead.toLocaleString()}`);
-  }
-}
-
 function scheduleDailySnapshot() {
   const now = new Date();
   const next = new Date(now);
@@ -103,6 +87,7 @@ function scheduleDailySnapshot() {
   setTimeout(async () => {
     try {
       await saveHistorySnapshot();
+      log.info("History snapshot done.");
     } catch (err) {
       log.error(`History snapshot error: ${err.message}`);
     }
