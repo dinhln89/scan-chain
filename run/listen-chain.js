@@ -48,9 +48,12 @@ async function processBlock(chainKey, chain, web3, stats) {
   stats.filtered += saved;
   if (stats.fromBlock === null) stats.fromBlock = nextBlock.toString();
   stats.toBlock = nextBlock.toString();
-  flushStats(stats, chain.label, log, "new");
+  flushStats(stats, chain.label, log);
 
-  await Setting.set(chain.settingKey, nextBlock.toString());
+  await Promise.all([
+    Setting.set(chain.settingKey, nextBlock.toString()),
+    Setting.set(`chain_head_${chainKey}`, chainBlock.toString()),
+  ]);
   return true;
 }
 

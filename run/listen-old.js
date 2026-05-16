@@ -77,7 +77,7 @@ async function processBatch(chainKey, chain, web3, stats) {
   const newTarget = target - BigInt(blockNumbers.length);
   if (stats.fromBlock === null) stats.fromBlock = target.toString();
   stats.toBlock = newTarget.toString();
-  flushStats(stats, chain.label, log, "old");
+  flushStats(stats, chain.label, log);
 
   await Setting.set(settingKey, newTarget.toString());
   return true;
