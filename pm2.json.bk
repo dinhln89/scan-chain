@@ -23,14 +23,6 @@
             "autorestart": true,
             "max_memory_restart": "4G",
             "cron_restart": "26,6,46 * * * *"
-        },
-        {
-            "name": "dcp-proxy",
-            "script": "./pull.sh && node run/decompile-proxy.js",
-            "instances": 1,
-            "autorestart": true,
-            "max_memory_restart": "4G",
-            "cron_restart": "26,6,46 * * * *"
         }
     ]
 }
