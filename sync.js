@@ -118,6 +118,20 @@ async function main() {
     log.info('Cot chain da ton tai, bo qua');
   }
 
+  const proxyColumns = await qi.describeTable('proxies').catch(() => null);
+  if (proxyColumns && !proxyColumns.decompileInitDone) {
+    done = withTimer('[8/9] Thêm cột decompileInitDone vào proxies...');
+    await qi.addColumn('proxies', 'decompileInitDone', {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    });
+    done();
+  } else {
+    process.stdout.write('[8/9] Cột decompileInitDone đã tồn tại, bỏ qua\n');
+    log.info('Cot decompileInitDone da ton tai, bo qua');
+  }
+
   const FOURBYTE_CACHE = path.resolve(__dirname, 'data/4byte-cache.json');
   if (fs.existsSync(FOURBYTE_CACHE)) {
     const FourByteSelector = require('./models/FourByteSelector');
