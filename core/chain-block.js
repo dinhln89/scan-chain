@@ -25,6 +25,10 @@ let _blockedSet = new Set();
 let _blockedSetLoadedAt = 0;
 const BLOCKED_SET_TTL = 60_000;
 
+// In-memory cache cho skipIfSelectorExists — tránh query DB lặp lại mỗi block
+// Key: "selector:to:type". Grows to ~N unique pairs rồi stable.
+const _seenSelectorPairs = new Set();
+
 async function getBlockedSet() {
   const now = Date.now();
   if (now - _blockedSetLoadedAt < BLOCKED_SET_TTL) return _blockedSet;
@@ -75,21 +79,26 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
     type: chainKey,
   }));
 
-  // Forward crawl: 1 batch query để loại selector+to+type đã tồn tại
-  // Row constructor (selector,to,type) IN (...) dùng covering index, nhanh hơn Op.or
+  // Forward crawl: loại selector+to+type đã tồn tại dùng in-memory cache
+  // DB chỉ được query cho các pair chưa thấy bao giờ — sau vài block cache đủ và query gần như biến mất
   let candidates = allData;
   if (skipIfSelectorExists) {
     const checks = allData.filter((t) => t.to);
     if (checks.length > 0) {
-      const tuples = checks
-        .map((t) => `(${sequelize.escape(t.selector)},${sequelize.escape(t.to)},${sequelize.escape(chainKey)})`)
-        .join(",");
-      const existing = await sequelize.query(
-        `SELECT selector, \`to\`, type FROM transactions WHERE (selector, \`to\`, type) IN (${tuples})`,
-        { type: sequelize.QueryTypes.SELECT },
-      );
-      const seen = new Set(existing.map((e) => `${e.selector}:${e.to}:${e.type}`));
-      candidates = allData.filter((t) => !t.to || !seen.has(`${t.selector}:${t.to}:${chainKey}`));
+      const unknown = checks.filter((t) => !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
+      if (unknown.length > 0) {
+        const tuples = unknown
+          .map((t) => `(${sequelize.escape(t.selector)},${sequelize.escape(t.to)},${sequelize.escape(chainKey)})`)
+          .join(",");
+        const existing = await sequelize.query(
+          `SELECT selector, \`to\`, type FROM transactions WHERE (selector, \`to\`, type) IN (${tuples}) GROUP BY selector, \`to\`, type`,
+          { type: sequelize.QueryTypes.SELECT },
+        );
+        for (const e of existing) _seenSelectorPairs.add(`${e.selector}:${e.to}:${e.type}`);
+      }
+      candidates = allData.filter((t) => !t.to || !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
+      // Thêm các tx mới insert vào cache để block tiếp không cần check DB
+      for (const t of candidates.filter((t) => t.to)) _seenSelectorPairs.add(`${t.selector}:${t.to}:${chainKey}`);
     }
   }
   if (candidates.length === 0) return 0;
