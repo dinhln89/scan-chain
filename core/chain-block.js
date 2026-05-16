@@ -1,3 +1,5 @@
+const { Op } = require("sequelize");
+const sequelize = require("../db");
 const Transaction = require("../models/Transaction");
 const Contract = require("../models/Contract");
 const IgnoreAddress = require("./ignore-address");
@@ -54,44 +56,66 @@ function filterTxs(txs) {
 // Lưu danh sách tx vào DB. Trả về số tx đã insert mới.
 // skipIfSelectorExists: bỏ qua nếu đã có tx cùng selector+to+type (dùng cho forward crawl)
 async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists = false } = {}) {
-  let saved = 0;
-  for (const tx of txs) {
-    const selector = tx.input.slice(0, 10).toLowerCase();
+  if (txs.length === 0) return 0;
 
-    if (skipIfSelectorExists && tx.to) {
-      const exists = await Transaction.findOne({
-        where: { selector, to: tx.to.toLowerCase(), type: chainKey },
-        attributes: ["id"],
+  const allData = txs.map((tx) => ({
+    hash: tx.hash,
+    blockNumber: Number(blockNumber),
+    transactionIndex: tx.transactionIndex != null ? Number(tx.transactionIndex) : null,
+    from: tx.from,
+    to: tx.to || null,
+    value: tx.value.toString(),
+    gas: tx.gas != null ? Number(tx.gas) : null,
+    input: tx.input,
+    selector: tx.input.slice(0, 10).toLowerCase(),
+    type: chainKey,
+  }));
+
+  // Forward crawl: 1 batch query để loại selector+to+type đã tồn tại
+  let candidates = allData;
+  if (skipIfSelectorExists) {
+    const checks = allData.filter((t) => t.to).map((t) => ({ selector: t.selector, to: t.to, type: chainKey }));
+    if (checks.length > 0) {
+      const existing = await Transaction.findAll({
+        where: { [Op.or]: checks },
+        attributes: ["selector", "to", "type"],
       });
-      if (exists) continue;
-    }
-
-    const [, created] = await Transaction.upsert({
-      hash: tx.hash,
-      blockNumber: Number(blockNumber),
-      transactionIndex: tx.transactionIndex != null ? Number(tx.transactionIndex) : null,
-      from: tx.from,
-      to: tx.to || null,
-      value: tx.value.toString(),
-      gas: tx.gas != null ? Number(tx.gas) : null,
-      input: tx.input,
-      selector,
-      type: chainKey,
-    });
-
-    if (created !== false) {
-      saved++;
-      if (tx.to) {
-        const addr = tx.to.toLowerCase();
-        const [contract] = await Contract.findOrCreate({
-          where: { address: addr },
-          defaults: { txCount: 0, url: chain.explorerUrl(addr) },
-        });
-        await contract.increment("txCount");
-      }
+      const seen = new Set(existing.map((e) => `${e.selector}:${e.to}:${e.type}`));
+      candidates = allData.filter((t) => !t.to || !seen.has(`${t.selector}:${t.to}:${chainKey}`));
     }
   }
-  return saved;
+  if (candidates.length === 0) return 0;
+
+  // 1 batch query tìm hash đã tồn tại → chỉ insert mới
+  const hashes = candidates.map((t) => t.hash);
+  const existingHashes = new Set(
+    (await Transaction.findAll({ where: { hash: { [Op.in]: hashes } }, attributes: ["hash"] })).map((r) => r.hash),
+  );
+  const newTxs = candidates.filter((t) => !existingHashes.has(t.hash));
+  if (newTxs.length === 0) return 0;
+
+  // 1 bulk insert
+  await Transaction.bulkCreate(newTxs, { ignoreDuplicates: true });
+
+  // 1 raw upsert để tăng txCount theo batch
+  const addrCounts = new Map();
+  for (const tx of newTxs) {
+    if (tx.to) {
+      const addr = tx.to.toLowerCase();
+      addrCounts.set(addr, (addrCounts.get(addr) || 0) + 1);
+    }
+  }
+  if (addrCounts.size > 0) {
+    const entries = [...addrCounts.entries()];
+    const placeholders = entries.map(() => "(?, ?, ?)").join(", ");
+    const params = entries.flatMap(([addr, count]) => [addr, count, chain.explorerUrl(addr)]);
+    await sequelize.query(
+      `INSERT INTO \`contracts\` (address, txCount, url) VALUES ${placeholders} ON DUPLICATE KEY UPDATE txCount = txCount + VALUES(txCount)`,
+      { replacements: params },
+    );
+  }
+
+  return newTxs.length;
 }
 
 function makeStats() {
