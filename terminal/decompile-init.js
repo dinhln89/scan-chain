@@ -154,11 +154,44 @@ async function findInitFromDasm(dasmFile) {
   for (const sel of selectors) {
     const sig = await lookup4byte(sel, cache);
     if (sig && INIT_RE.test(sig.split("(")[0])) {
-      initFns.push(sig);
+      initFns.push({ sel, sig });
     }
   }
   save4byteCache(cache);
   return initFns;
+}
+
+// ── eth_call check ────────────────────────────────────────────────────────────
+
+const SIM_FROM = "0xff3f428583c15a5681584e9e5e86e270418ac4d3";
+const ERROR_SELECTOR = "0x08c379a0"; // Error(string)
+
+async function checkInitCallable(contractAddress, sel) {
+  try {
+    const result = await rpcCall("eth_call", [
+      { from: SIM_FROM, to: contractAddress, data: sel },
+      "latest",
+    ]);
+    // Revert trả về Error(string) hoặc "0x"
+    if (!result || result === "0x") return { callable: false, reason: "revert (no data)" };
+    if (result.startsWith(ERROR_SELECTOR)) {
+      // Decode revert reason string (ABI: offset 4 + 32 + 32 + data)
+      try {
+        const hex = result.slice(10); // bỏ selector
+        const offset = parseInt(hex.slice(0, 64), 16) * 2;
+        const len = parseInt(hex.slice(64, 128), 16) * 2;
+        const reason = Buffer.from(hex.slice(128, 128 + len), "hex").toString("utf8");
+        return { callable: false, reason };
+      } catch {
+        return { callable: false, reason: "revert" };
+      }
+    }
+    return { callable: true, result };
+  } catch (err) {
+    const msg = err.message || "";
+    const reason = msg.includes(":") ? msg.split(":").slice(1).join(":").trim() : msg;
+    return { callable: false, reason };
+  }
 }
 
 // ── Fallback: decompile-contract.js subprocess ───────────────────────────────
@@ -216,7 +249,11 @@ async function processAddress(address) {
       console.log("  (khong co init method)");
     } else {
       console.log(`  // One-time init (${initFns.length}):`);
-      initFns.forEach((sig) => console.log(`  // function external ${sig}`));
+      for (const { sel, sig } of initFns) {
+        const check = await checkInitCallable(address, sel);
+        const status = check.callable ? "✓ CALLABLE" : `✗ ${check.reason}`;
+        console.log(`  // function external ${sig}  [${status}]`);
+      }
     }
   } else {
     console.log("  Chay decompile-contract.js...");
