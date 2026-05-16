@@ -99,6 +99,10 @@ async function main() {
 
   // Proxy: DELEGATECALL có selector trùng với top-level tx
   const proxySelector = tx.input.slice(0, 10).toLowerCase();
+  console.log("\n[delegateCalls debug]");
+  console.log("  proxySelector (tx top-level):", proxySelector);
+  console.log("  result.delegateCalls (all):", JSON.stringify(result.delegateCalls, null, 2));
+
   const matchedDelegateCalls = result.delegateCalls.filter((dc) => dc.selector === proxySelector);
   console.log("\n[delegateCalls / Proxy]", matchedDelegateCalls.length > 0 ? "" : "(none)");
   matchedDelegateCalls.forEach((dc, i) => {
