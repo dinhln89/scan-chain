@@ -1,5 +1,9 @@
 const sequelize = require("../db");
-const { readAll, readHistory, saveHistorySnapshot } = require("../core/stats-store");
+const {
+  readAll,
+  readHistory,
+  saveHistorySnapshot,
+} = require("../core/stats-store");
 
 function n(val, w = 13) {
   if (val == null) return "N/A".padStart(w);
@@ -31,7 +35,7 @@ async function render() {
     console.log(`│ ${label.padEnd(12)} │ ${n(bVal)} │ ${n(eVal)} │`);
   }
   console.log("├──────────────┴───────────────┴───────────────┤");
-  console.log(`│  Updated: ${new Date().toLocaleTimeString().padStart(34)}  │`);
+  console.log(`│  Updated: ${new Date().toLocaleTimeString().padStart(34)} │`);
   console.log("└──────────────────────────────────────────────┘");
 
   if (history.length === 0) return;
@@ -44,7 +48,9 @@ async function render() {
   for (const row of history) {
     const b = row.bsc ?? { delta: null, pct: null };
     const e = row.eth ?? { delta: null, pct: null };
-    console.log(`│ ${row.date} │ ${n(b.delta)} │ ${pct(b.pct)} │ ${n(e.delta)} │ ${pct(e.pct)} │`);
+    console.log(
+      `│ ${row.date} │ ${n(b.delta)} │ ${pct(b.pct)} │ ${n(e.delta)} │ ${pct(e.pct)} │`,
+    );
   }
   console.log("└────────────┴───────────────┴───────┴───────────────┴───────┘");
 }

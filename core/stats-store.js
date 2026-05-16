@@ -48,7 +48,7 @@ async function readHistory(days = 7) {
       if (idx < 0) { entry[c] = { delta: null, pct: null }; continue; }
       const curr = recs[idx];
       const prev = idx > 0 ? recs[idx - 1] : null;
-      const delta = prev ? Number(curr.scanned) - Number(prev.scanned) : null;
+      const delta = prev ? Number(curr.scanned) - Number(prev.scanned) : Number(curr.scanned);
       const head = Number(curr.chainHead);
       const pct = delta != null && head > 0 ? ((delta / head) * 100).toFixed(2) : null;
       entry[c] = { delta, pct };
