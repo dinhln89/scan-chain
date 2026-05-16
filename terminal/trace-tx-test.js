@@ -97,6 +97,14 @@ async function main() {
     });
   }
 
+  // Proxy: DELEGATECALL trong trace
+  console.log("\n[delegateCalls / Proxy]", result.delegateCalls.length > 0 ? "" : "(none)");
+  result.delegateCalls.forEach((dc, i) => {
+    console.log(`  [${i}] proxy          : ${dc.proxy}`);
+    console.log(`       implementation : ${dc.implementation}`);
+    console.log(`       selector       : ${dc.selector ?? "(none)"}`);
+  });
+
   // Debug: scan trace tìm ecrecover precompile calls
   {
     const ECRECOVER = "0x0000000000000000000000000000000000000001";
@@ -155,6 +163,13 @@ async function main() {
       tx.blockNumber,
       new Date().toLocaleString(),
     ]);
+  }
+
+  if (result.delegateCalls.length > 0) {
+    console.log("[Proxy inserts]");
+    result.delegateCalls.forEach((dc) => {
+      console.log(" ", { proxy: dc.proxy, implementation: dc.implementation, chain: chain.toLowerCase() });
+    });
   }
 
   console.log("=".repeat(60));
