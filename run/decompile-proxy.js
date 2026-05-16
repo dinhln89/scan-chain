@@ -183,15 +183,19 @@ function decompileViaSubprocess(chain, address) {
     output = err.stdout || "";
   }
 
-  const initFns = [];
+  if (/timed out|timeout/i.test(output)) {
+    return { timedOut: true, fns: [] };
+  }
+
+  const fns = [];
   const FN_RE = /\/\/\s*function\s+(?:external\s+)?(\S+\([^)]*\))/i;
   for (const line of output.split("\n")) {
     const m = line.match(FN_RE);
     if (m && INIT_RE.test(m[1].split("(")[0])) {
-      initFns.push(m[1]);
+      fns.push(m[1]);
     }
   }
-  return initFns;
+  return { timedOut: false, fns };
 }
 
 // ── Decompile cache keyed by implementation address ───────────────────────────
@@ -210,10 +214,10 @@ async function getInitFns(chain, implementation) {
   let entry;
   if (fs.existsSync(dasmFile)) {
     const fns = await findInitFromDasm(dasmFile);
-    entry = { source: "dasm", fns };
+    entry = { source: "dasm", timedOut: false, fns };
   } else {
-    const sigs = decompileViaSubprocess(chain, implementation);
-    entry = { source: "subprocess", fns: sigs.map((sig) => ({ sel: "", sig })) };
+    const { timedOut, fns } = decompileViaSubprocess(chain, implementation);
+    entry = { source: "subprocess", timedOut, fns: fns.map((sig) => ({ sel: "", sig })) };
   }
 
   _decompileCache.set(implementation, entry);
@@ -229,11 +233,13 @@ async function processProxy(record) {
 
   log.info(`[${chain}] ${proxy} → ${implementation}`);
 
-  const { source, fns } = await getInitFns(chain, implementation);
+  const { source, fns, timedOut } = await getInitFns(chain, implementation);
 
   let rows = [];
 
-  if (fns.length === 0) {
+  if (timedOut) {
+    rows.push(buildRow(chain, proxy, implementation, explorerFn, "TIMEOUT", "-", ""));
+  } else if (fns.length === 0) {
     rows.push(buildRow(chain, proxy, implementation, explorerFn, "(none)", "-", ""));
   } else {
     for (const { sel, sig } of fns) {
