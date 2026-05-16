@@ -14,6 +14,7 @@ require("../models/User");
 require("../models/FourByteSelector");
 require("../models/IgnoreAddress");
 require("../models/History");
+require("../models/Proxy");
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 

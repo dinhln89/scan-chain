@@ -8,6 +8,7 @@ const {
 } = require("../core/trace-tx-process");
 const { rpcContext, rawRpcEth } = require("../core/trace");
 const { append } = require("../core/sheets");
+const Proxy = require("../models/Proxy");
 const { createLogger } = require("../core/logger");
 
 const log = createLogger(__filename);
@@ -67,19 +68,11 @@ async function processTx(tx) {
     );
   }
 
-  // ProxySheet: internal call dạng DELEGATECALL
-  if (result.delegateCalls.length > 0) {
-    const rows = result.delegateCalls.map((dc) => [
-      tx.hash,
-      `https://${scanBase}/address/${dc.proxy}`,
-      `https://${scanBase}/address/${dc.implementation}`,
-      `https://${scanBase}/tx/${tx.hash}`,
-      dc.selector ?? "",
-      chain,
-      tx.blockNumber,
-      now.toLocaleString(),
-    ]);
-    await append(rows, { sheet: "ProxySheet" });
+  // Proxy model: lưu các cặp (proxy, implementation, chain) unique từ DELEGATECALL
+  for (const dc of result.delegateCalls) {
+    await Proxy.findOrCreate({
+      where: { proxy: dc.proxy, implementation: dc.implementation, chain: tx.type },
+    });
   }
 }
 

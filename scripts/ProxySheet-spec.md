@@ -1,1 +1,1 @@
-- Khi scan trace-tx, thấy các internal call nào thuộc dạng proxy thì insert vào ProxySheet tại https://docs.google.com/spreadsheets/d/1E6P0tLWMSiMIv7JNA3USpr-XAUeQp7OpzvFbJWesRQs/edit?gid=1014435801#gid=1014435801
+- Khi scan trace-tx, thấy các internal call nào thuộc dạng proxy thì insert vào Proxy model với địa chỉ proxy & implementation & chain là unique. Lần sau nếu khác implementation thì sẽ insert thêm.
