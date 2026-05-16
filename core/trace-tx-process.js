@@ -170,6 +170,7 @@ async function resolveSwapPairs(balanceOfWallets, getReservesAddrs) {
 async function processTxData(tx) {
   const {
     calls,
+    delegateCalls,
     logs,
     transfers,
     isEcrecoverSender,
@@ -341,6 +342,7 @@ async function processTxData(tx) {
 
   return {
     calls,
+    delegateCalls,
     transfers,
     isEcrecoverSender,
     isTransferSender,

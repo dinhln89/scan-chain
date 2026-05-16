@@ -519,10 +519,12 @@ async function analyzeTx(txHash, txData = null) {
 
   // C: ecrecover precompile call trả về địa chỉ trùng sender
   const isEcrecoverSender = hasEcrecoverForSender(trace, sender);
+  const delegateCalls = extractDelegateCalls(trace);
 
   return {
     addresses,
     calls,
+    delegateCalls,
     logs: receipt?.logs || [],
     hasSignature: hasSignatureInInput(tx.input),
     isEcrecoverSender,
@@ -563,6 +565,29 @@ async function simulateTx(to, input, blockNumber, txIndex, gas) {
   }
 }
 
+// Tìm tất cả DELEGATECALL trong cây trace. Mỗi entry: { proxy, implementation, selector }.
+// Dedup theo cặp (proxy, implementation).
+function extractDelegateCalls(node, results = [], seen = new Set()) {
+  if (!node) return results;
+  if (node.type?.toUpperCase() === "DELEGATECALL" && node.from && node.to) {
+    const proxy = node.from.toLowerCase();
+    const impl = node.to.toLowerCase();
+    const key = `${proxy}:${impl}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      results.push({
+        proxy,
+        implementation: impl,
+        selector: node.input?.slice(0, 10)?.toLowerCase() || null,
+      });
+    }
+  }
+  for (const child of node.calls || []) {
+    extractDelegateCalls(child, results, seen);
+  }
+  return results;
+}
+
 module.exports = {
   analyzeTx,
   makeCache,
@@ -570,6 +595,7 @@ module.exports = {
   decodeTransfers,
   extractAddressesFromInput,
   extractCalls,
+  extractDelegateCalls,
   getErc20Name,
   getErc20Symbol,
   getErc20SymbolBatch,

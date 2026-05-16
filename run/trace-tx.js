@@ -66,6 +66,21 @@ async function processTx(tx) {
       { sheet: "TransferFromSheet" },
     );
   }
+
+  // ProxySheet: internal call dạng DELEGATECALL
+  if (result.delegateCalls.length > 0) {
+    const rows = result.delegateCalls.map((dc) => [
+      tx.hash,
+      `https://${scanBase}/address/${dc.proxy}`,
+      `https://${scanBase}/address/${dc.implementation}`,
+      `https://${scanBase}/tx/${tx.hash}`,
+      dc.selector ?? "",
+      chain,
+      tx.blockNumber,
+      now.toLocaleString(),
+    ]);
+    await append(rows, { sheet: "ProxySheet" });
+  }
 }
 
 // Lỗi có thể bỏ qua hoàn toàn (đánh processed=true, không retry)
