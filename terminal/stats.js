@@ -10,7 +10,7 @@ function n(val, w = 13) {
   return val.toLocaleString("en-US").padStart(w);
 }
 
-function pct(val, w = 7) {
+function pct(val, w = 5) {
   if (val == null) return "N/A".padStart(w);
   return `${val}%`.padStart(w);
 }
