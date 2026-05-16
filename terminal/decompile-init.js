@@ -4,111 +4,53 @@ require("dotenv").config({
 
 const path = require("path");
 const { execSync } = require("child_process");
-const sequelize = require("../db");
-const ContractDecompile = require("../models/ContractDecompile");
-const Proxy = require("../models/Proxy");
 
 const TYPE_ARG = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
-const FORCE = process.argv.includes("--force");
 
-function parseJsonField(val) {
-  if (Array.isArray(val)) return val;
-  try { return JSON.parse(val); } catch { return []; }
-}
+function decompileAndShowInit(address) {
+  const cmd = `node ${path.join(__dirname, "decompile-contract.js")} --type=${TYPE_ARG} ${address}`;
+  let output;
+  try {
+    output = execSync(cmd, { cwd: path.resolve(__dirname, ".."), encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] });
+  } catch (err) {
+    output = err.stdout || "";
+  }
 
-// Resolve proxy chain đến implementation cuối cùng
-async function resolveImpl(address) {
-  let addr = address.toLowerCase();
-  const visited = new Set();
-  while (true) {
-    if (visited.has(addr)) break;
-    visited.add(addr);
-    const row = await ContractDecompile.findByPk(addr);
-    if (row?.proxyOf && row.source === "proxy") {
-      addr = row.proxyOf.toLowerCase();
-    } else {
-      break;
+  // Lấy block "One-time init"
+  const lines = output.split("\n");
+  const initLines = [];
+  let inInit = false;
+  for (const line of lines) {
+    if (/\/\/ One-time init/.test(line)) { inInit = true; initLines.push(line.trim()); continue; }
+    if (inInit) {
+      if (line.startsWith("// function ") || line.startsWith("//   ")) {
+        initLines.push(line.trim());
+      } else {
+        break;
+      }
     }
   }
-  return addr;
-}
 
-async function getInitMethods(address) {
-  const impl = await resolveImpl(address);
-  const row = await ContractDecompile.findByPk(impl);
-  if (!row) return null;
-  const fns = parseJsonField(row.functions);
-  return {
-    impl,
-    source: row.source,
-    chain: row.chain,
-    initFns: fns.filter((f) => f.group === "One-time init"),
-  };
-}
-
-function decompile(address) {
-  const cmd = `node ${path.join(__dirname, "decompile-contract.js")} --type=${TYPE_ARG} ${address}`;
-  try {
-    execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "..") });
-  } catch {
-    // lỗi đã in ra stdio
-  }
-}
-
-async function processAddress(address) {
-  address = address.toLowerCase();
-
-  // Kiểm tra DB cache
-  let info = await getInitMethods(address);
-
-  if (!info || FORCE) {
-    console.log(`\n[decompile] ${address}`);
-    decompile(address);
-    info = await getInitMethods(address);
-  }
-
-  if (!info) {
-    console.log(`${address}: decompile that bai`);
-    return;
-  }
-
-  const label = info.impl !== address ? `${address} → ${info.impl}` : address;
-  if (info.initFns.length === 0) {
-    console.log(`\n${label}: khong co init method (${info.source})`);
+  console.log(`\n[${address}]`);
+  if (initLines.length === 0) {
+    console.log("  (khong co init method)");
   } else {
-    console.log(`\n${label} (${info.source}, ${info.chain}) — init methods:`);
-    info.initFns.forEach((f) => console.log(`  function ${f.sig}`));
+    initLines.forEach((l) => console.log(" ", l));
   }
 }
 
 async function main() {
-  await sequelize.ensureDatabase();
-  await sequelize.sync();
-
   const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
-
-  let addresses;
-  if (args.length > 0) {
-    addresses = args;
-  } else {
-    // Lấy tất cả implementation từ Proxy model theo chain
-    const rows = await Proxy.findAll({
-      where: { chain: TYPE_ARG },
-      attributes: ["implementation"],
-      group: ["implementation"],
-    });
-    addresses = rows.map((r) => r.implementation);
-    console.log(`Proxy model [${TYPE_ARG}]: ${addresses.length} unique implementations`);
+  if (args.length === 0) {
+    console.error("Usage: node terminal/decompile-init.js [--type=bsc|eth] <address> [address2] ...");
+    process.exit(1);
   }
-
-  for (const addr of addresses) {
-    await processAddress(addr);
+  for (const addr of args) {
+    decompileAndShowInit(addr);
   }
-
-  await sequelize.close();
 }
 
 main().catch((err) => {
-  console.error("Loi:", err.message);
+  console.error("Loi:", err.message || err);
   process.exit(1);
 });
