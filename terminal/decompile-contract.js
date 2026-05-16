@@ -763,8 +763,11 @@ async function decompileContract(address) {
     // Xóa stale working dir để gigahorse không skip contract
     fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
     try {
+      const pyenvRoot = process.env.PYENV_ROOT || path.join(process.env.HOME, ".pyenv");
+      const python310 = path.join(pyenvRoot, "versions/3.10.0/bin/python3.10");
+      const pythonBin = fs.existsSync(python310) ? python310 : "python3.10";
       const cmd = [
-        "python3.10",
+        pythonBin,
         path.join(DECOMPILE_DIR, "gigahorse.py"),
         "--interpreted",
         "--skip_sig_resolution",
