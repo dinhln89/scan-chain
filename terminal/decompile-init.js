@@ -6,14 +6,22 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 const TYPE_ARG = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
+const DEBUG = process.argv.includes("--debug");
 
 function decompileAndShowInit(address) {
   const cmd = `node ${path.join(__dirname, "decompile-contract.js")} --type=${TYPE_ARG} ${address}`;
+  if (DEBUG) console.log("[cmd]", cmd);
+
   let output;
   try {
     output = execSync(cmd, { cwd: path.resolve(__dirname, ".."), encoding: "utf8", stdio: ["pipe", "pipe", "inherit"] });
   } catch (err) {
     output = err.stdout || "";
+  }
+
+  if (DEBUG) {
+    console.log("[raw output]");
+    console.log(output || "(empty)");
   }
 
   // Lấy block "One-time init"

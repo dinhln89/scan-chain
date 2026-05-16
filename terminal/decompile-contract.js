@@ -728,34 +728,17 @@ async function decompileContract(address) {
     // Xóa stale working dir để gigahorse không skip contract
     fs.rmSync(path.join(TEMP_DIR, name), { recursive: true, force: true });
     try {
-      fs.mkdirSync(path.join(GIGAHORSE_ROOT, ".temp"), { recursive: true });
-      fs.mkdirSync(path.join(GIGAHORSE_ROOT, "cache"), { recursive: true });
-      const uid = process.getuid();
-      const gid = process.getgid();
-      const bind = (src, dst) => `--mount type=bind,source=${src},target=${CONTAINER_ROOT}/${dst}`;
       const cmd = [
-        "docker run",
-        `-v ${process.env.HOME}:${process.env.HOME}`,
-        `--mount type=bind,source=${GIGAHORSE_ROOT}/.temp,target=${CONTAINER_ROOT}/.temp`,
-        `--mount type=bind,source=${GIGAHORSE_ROOT}/cache,target=${CONTAINER_ROOT}/cache`,
-        bind(`${DECOMPILE_DIR}/src`, "src"),
-        bind(`${DECOMPILE_DIR}/logic`, "logic"),
-        bind(`${DECOMPILE_DIR}/clients`, "clients"),
-        bind(`${DECOMPILE_DIR}/clientlib`, "clientlib"),
-        bind(`${DECOMPILE_DIR}/gigahorse.py`, "gigahorse.py"),
-        bind(`${DECOMPILE_DIR}/generatefacts`, "generatefacts"),
-        "--rm",
-        `-u ${uid}:${gid}`,
-        `-w ${PROJECT_ROOT}`,
-        "-i",
-        DOCKER_IMAGE,
+        "python3.10",
+        path.join(DECOMPILE_DIR, "gigahorse.py"),
         "--interpreted",
         "--skip_sig_resolution",
         `-T ${TIMEOUT}`,
+        `--minimum_client_time ${TIMEOUT}`,
         `-C ${path.join(DECOMPILE_DIR, "clients/visualizeout.py")}`,
         hexFile,
       ].join(" ");
-      execSync(cmd, { stdio: "inherit", cwd: PROJECT_ROOT });
+      execSync(cmd, { stdio: "inherit", cwd: DECOMPILE_DIR });
     } catch {
       console.error("gigahorse thất bại");
       return;
