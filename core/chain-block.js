@@ -53,6 +53,10 @@ function filterTxs(txs) {
   });
 }
 
+function isDeadlock(err) {
+  return err?.original?.errno === 1213 || /deadlock/i.test(err?.message || "");
+}
+
 // Lưu danh sách tx vào DB. Trả về số tx đã insert mới.
 // skipIfSelectorExists: bỏ qua nếu đã có tx cùng selector+to+type (dùng cho forward crawl)
 async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists = false } = {}) {
@@ -94,8 +98,16 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
   const newTxs = candidates.filter((t) => !existingHashes.has(t.hash));
   if (newTxs.length === 0) return 0;
 
-  // 1 bulk insert
-  await Transaction.bulkCreate(newTxs, { ignoreDuplicates: true });
+  // 1 bulk insert — retry on deadlock (listen-chain vs listen-old concurrent writes)
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await Transaction.bulkCreate(newTxs, { ignoreDuplicates: true });
+      break;
+    } catch (err) {
+      if (isDeadlock(err) && attempt < 2) continue;
+      throw err;
+    }
+  }
 
   // 1 raw upsert để tăng txCount theo batch
   const addrCounts = new Map();
@@ -109,10 +121,18 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
     const entries = [...addrCounts.entries()];
     const placeholders = entries.map(() => "(?, ?, ?)").join(", ");
     const params = entries.flatMap(([addr, count]) => [addr, count, chain.explorerUrl(addr)]);
-    await sequelize.query(
-      `INSERT INTO \`contracts\` (address, txCount, url) VALUES ${placeholders} ON DUPLICATE KEY UPDATE txCount = txCount + VALUES(txCount)`,
-      { replacements: params },
-    );
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await sequelize.query(
+          `INSERT INTO \`contracts\` (address, txCount, url) VALUES ${placeholders} ON DUPLICATE KEY UPDATE txCount = txCount + VALUES(txCount)`,
+          { replacements: params },
+        );
+        break;
+      } catch (err) {
+        if (isDeadlock(err) && attempt < 2) continue;
+        throw err;
+      }
+    }
   }
 
   return newTxs.length;

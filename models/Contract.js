@@ -12,7 +12,6 @@ const Contract = sequelize.define(
     address: {
       type: DataTypes.STRING(42),
       allowNull: false,
-      unique: true,
     },
     txCount: {
       type: DataTypes.BIGINT,
@@ -38,7 +37,10 @@ const Contract = sequelize.define(
   {
     tableName: "contracts",
     timestamps: false,
-    indexes: [{ unique: true, fields: ["address"] }],
+    indexes: [
+      { unique: true, fields: ["address"] },
+      { fields: ["isBlock"], name: "contracts_is_block" },
+    ],
   },
 );
 

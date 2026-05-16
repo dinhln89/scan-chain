@@ -19,8 +19,8 @@ require("dotenv").config({
 const log = createLogger(__filename);
 
 const OLD_BLOCK_KEY = (chainKey) => `old_block_${chainKey}`;
-const BATCH_SIZE = 3;
-const BATCH_DELAY_MS = 500; // nhường RPC cho listen-chain
+const BATCH_SIZE = 2;
+const BATCH_DELAY_MS = 1500; // nhường RPC và DB cho listen-chain + trace-tx
 
 async function fetchAndSave(chainKey, chain, web3, blockNumber) {
   let block;

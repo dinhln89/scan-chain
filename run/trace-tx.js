@@ -69,10 +69,15 @@ async function processTx(tx) {
   }
 
   // Proxy model: lưu các cặp (proxy, implementation, chain) unique từ DELEGATECALL
-  for (const dc of result.delegateCalls) {
-    await Proxy.findOrCreate({
-      where: { proxy: dc.proxy, implementation: dc.implementation, chain: tx.type },
-    });
+  if (result.delegateCalls.length > 0) {
+    await Proxy.bulkCreate(
+      result.delegateCalls.map((dc) => ({
+        proxy: dc.proxy,
+        implementation: dc.implementation,
+        chain: tx.type,
+      })),
+      { ignoreDuplicates: true },
+    );
   }
 }
 
