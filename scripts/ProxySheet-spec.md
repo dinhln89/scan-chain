@@ -1,1 +1,1 @@
-- Khi scan trace-tx, thấy các internal call nào thuộc dạng proxy thì insert vào Proxy model với địa chỉ proxy & implementation & chain là unique. Lần sau nếu khác implementation thì sẽ insert thêm.
+- Khi scan trace-tx, thấy các internal call nào thuộc dạng proxy thì insert vào Proxy model với địa chỉ proxy & chain là unique. Lần sau nếu khác implementation thì sẽ check lai proxy va chi giu implementation moi nhat trong Proxy model

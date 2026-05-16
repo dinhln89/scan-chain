@@ -2,62 +2,110 @@ require("dotenv").config({
   path: require("path").resolve(__dirname, "../.env"),
 });
 
+const path = require("path");
+const { execSync } = require("child_process");
 const sequelize = require("../db");
-require("../models/ContractDecompile");
+const ContractDecompile = require("../models/ContractDecompile");
+const Proxy = require("../models/Proxy");
 
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+const TYPE_ARG = (process.argv.find((a) => a.startsWith("--type=")) || "--type=bsc").slice(7);
+const FORCE = process.argv.includes("--force");
 
-function withTimer(label) {
-  const start = Date.now();
-  let frame = 0;
-  const interval = setInterval(() => {
-    const secs = ((Date.now() - start) / 1000).toFixed(1);
-    process.stdout.write(`\r${SPINNER[frame++ % SPINNER.length]} ${label} ${secs}s`);
-  }, 100);
-  return (note = "") => {
-    clearInterval(interval);
-    const secs = ((Date.now() - start) / 1000).toFixed(1);
-    process.stdout.write(`\r✓ ${label} ${secs}s${note ? `  (${note})` : ""}\n`);
+function parseJsonField(val) {
+  if (Array.isArray(val)) return val;
+  try { return JSON.parse(val); } catch { return []; }
+}
+
+// Resolve proxy chain đến implementation cuối cùng
+async function resolveImpl(address) {
+  let addr = address.toLowerCase();
+  const visited = new Set();
+  while (true) {
+    if (visited.has(addr)) break;
+    visited.add(addr);
+    const row = await ContractDecompile.findByPk(addr);
+    if (row?.proxyOf && row.source === "proxy") {
+      addr = row.proxyOf.toLowerCase();
+    } else {
+      break;
+    }
+  }
+  return addr;
+}
+
+async function getInitMethods(address) {
+  const impl = await resolveImpl(address);
+  const row = await ContractDecompile.findByPk(impl);
+  if (!row) return null;
+  const fns = parseJsonField(row.functions);
+  return {
+    impl,
+    source: row.source,
+    chain: row.chain,
+    initFns: fns.filter((f) => f.group === "One-time init"),
   };
 }
 
-async function confirm(question) {
-  process.stdout.write(question);
-  return new Promise((resolve) => {
-    process.stdin.setEncoding("utf8");
-    process.stdin.once("data", (data) => {
-      process.stdin.destroy();
-      resolve(data.trim().toLowerCase() === "y");
-    });
-  });
+function decompile(address) {
+  const cmd = `node ${path.join(__dirname, "decompile-contract.js")} --type=${TYPE_ARG} ${address}`;
+  try {
+    execSync(cmd, { stdio: "inherit", cwd: path.resolve(__dirname, "..") });
+  } catch {
+    // lỗi đã in ra stdio
+  }
 }
 
-async function getRowCount(table) {
-  try {
-    const [[{ n }]] = await sequelize.query(`SELECT COUNT(*) AS n FROM \`${table}\``);
-    return Number(n);
-  } catch {
-    return null;
+async function processAddress(address) {
+  address = address.toLowerCase();
+
+  // Kiểm tra DB cache
+  let info = await getInitMethods(address);
+
+  if (!info || FORCE) {
+    console.log(`\n[decompile] ${address}`);
+    decompile(address);
+    info = await getInitMethods(address);
+  }
+
+  if (!info) {
+    console.log(`${address}: decompile that bai`);
+    return;
+  }
+
+  const label = info.impl !== address ? `${address} → ${info.impl}` : address;
+  if (info.initFns.length === 0) {
+    console.log(`\n${label}: khong co init method (${info.source})`);
+  } else {
+    console.log(`\n${label} (${info.source}, ${info.chain}) — init methods:`);
+    info.initFns.forEach((f) => console.log(`  function ${f.sig}`));
   }
 }
 
 async function main() {
   await sequelize.ensureDatabase();
-  await sequelize.authenticate();
+  await sequelize.sync();
 
-  const count = await getRowCount("contract_decompiles");
-  const ok = await confirm(`Xoa ${count ?? "?"} rows trong contract_decompiles? (y/N): `);
-  if (!ok) {
-    console.log("Huy.");
-    return;
+  const args = process.argv.slice(2).filter((a) => !a.startsWith("--"));
+
+  let addresses;
+  if (args.length > 0) {
+    addresses = args;
+  } else {
+    // Lấy tất cả implementation từ Proxy model theo chain
+    const rows = await Proxy.findAll({
+      where: { chain: TYPE_ARG },
+      attributes: ["implementation"],
+      group: ["implementation"],
+    });
+    addresses = rows.map((r) => r.implementation);
+    console.log(`Proxy model [${TYPE_ARG}]: ${addresses.length} unique implementations`);
   }
 
-  const done = withTimer("Truncate contract_decompiles...");
-  await sequelize.query("TRUNCATE TABLE `contract_decompiles`");
-  done();
+  for (const addr of addresses) {
+    await processAddress(addr);
+  }
 
   await sequelize.close();
-  console.log("\nDone.");
 }
 
 main().catch((err) => {
