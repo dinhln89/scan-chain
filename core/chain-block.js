@@ -151,6 +151,15 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
   return newTxs.length;
 }
 
+// Pre-populate cache khi khởi động để tránh burst query sau restart
+async function warmSelectorCache() {
+  const rows = await sequelize.query(
+    "SELECT DISTINCT selector, `to`, type FROM transactions WHERE selector IS NOT NULL AND `to` IS NOT NULL",
+    { type: sequelize.QueryTypes.SELECT },
+  );
+  for (const r of rows) _seenSelectorPairs.add(`${r.selector}:${r.to}:${r.type}`);
+}
+
 function makeStats() {
   return { blocks: 0, filtered: 0, total: 0, fromBlock: null, toBlock: null, lastLog: Date.now() };
 }
@@ -168,4 +177,4 @@ function flushStats(stats, label, log) {
   }
 }
 
-module.exports = { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats };
+module.exports = { CHAIN_CONFIGS, getBlockedSet, filterTxs, saveTxs, makeStats, flushStats, warmSelectorCache };
