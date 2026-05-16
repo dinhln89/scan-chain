@@ -12,8 +12,7 @@ const Proxy = sequelize.define(
   {
     tableName: "proxies",
     timestamps: true,
-    updatedAt: false,
-    indexes: [{ unique: true, fields: ["proxy", "implementation", "chain"] }],
+    indexes: [{ unique: true, fields: ["proxy", "chain"] }],
   },
 );
 

@@ -68,15 +68,17 @@ async function processTx(tx) {
     );
   }
 
-  // Proxy model: lưu các cặp (proxy, implementation, chain) unique từ DELEGATECALL
-  if (result.delegateCalls.length > 0) {
+  // Proxy model: upsert theo (proxy, chain) — giữ implementation mới nhất
+  const proxySelector = tx.input?.slice(0, 10)?.toLowerCase();
+  const matchedDelegateCalls = result.delegateCalls.filter((dc) => dc.selector === proxySelector);
+  if (matchedDelegateCalls.length > 0) {
     await Proxy.bulkCreate(
-      result.delegateCalls.map((dc) => ({
+      matchedDelegateCalls.map((dc) => ({
         proxy: dc.proxy,
         implementation: dc.implementation,
         chain: tx.type,
       })),
-      { ignoreDuplicates: true },
+      { updateOnDuplicate: ["implementation", "updatedAt"] },
     );
   }
 }
