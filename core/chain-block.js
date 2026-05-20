@@ -151,11 +151,18 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
   return newTxs.length;
 }
 
-// Pre-populate cache khi khởi động để tránh burst query sau restart
+// Pre-populate cache khi khởi động — chỉ lấy 200k block gần nhất để tránh full scan
 async function warmSelectorCache() {
-  const rows = await sequelize.query(
-    "SELECT DISTINCT selector, `to`, type FROM transactions WHERE selector IS NOT NULL AND `to` IS NOT NULL",
+  const maxBlockRow = await sequelize.query(
+    "SELECT MAX(blockNumber) AS maxBlock FROM transactions",
     { type: sequelize.QueryTypes.SELECT },
+  );
+  const maxBlock = maxBlockRow[0]?.maxBlock;
+  if (!maxBlock) return;
+  const fromBlock = Number(maxBlock) - 200_000;
+  const rows = await sequelize.query(
+    "SELECT DISTINCT selector, `to`, type FROM transactions WHERE blockNumber >= ? AND selector IS NOT NULL AND `to` IS NOT NULL",
+    { replacements: [fromBlock], type: sequelize.QueryTypes.SELECT },
   );
   for (const r of rows) _seenSelectorPairs.add(`${r.selector}:${r.to}:${r.type}`);
 }
