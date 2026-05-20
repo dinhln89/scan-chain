@@ -111,4 +111,4 @@ async function main() {
   scheduleDailySnapshot();
 }
 
-main().catch((err) => log.error(err.message));
+main().catch((err) => log.error(err?.message || String(err)));

@@ -58,7 +58,8 @@ function filterTxs(txs) {
 }
 
 function isDeadlock(err) {
-  return err?.original?.errno === 1213 || /deadlock/i.test(err?.message || "");
+  const errno = err?.original?.errno;
+  return errno === 1213 || errno === 1205 || /deadlock|lock wait timeout/i.test(err?.message || "");
 }
 
 // Lưu danh sách tx vào DB. Trả về số tx đã insert mới.

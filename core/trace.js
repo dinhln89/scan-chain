@@ -111,6 +111,7 @@ async function batchRpc(requests) {
       ),
     });
     const json = await res.json();
+    if (!Array.isArray(json)) throw new Error(`batchRpc unexpected response: ${JSON.stringify(json)?.slice(0, 200)}`);
     return json.map((r) => (r.error ? null : r.result));
   });
 }

@@ -292,12 +292,12 @@ async function loop() {
 
 async function main() {
   await sequelize.authenticate();
-  await Proxy.sync();
+  await Proxy.sync({ alter: true });
   log.info(`decompile-proxy started (delay=${DELAY_MS}ms, sheet=${SHEET_NAME})`);
   loop();
 }
 
 main().catch((err) => {
-  log.error(err.message);
+  log.error(err?.message || String(err));
   process.exit(1);
 });
