@@ -42,7 +42,7 @@ async function processBlock(chainKey, chain, web3, stats) {
   const txs = block.transactions;
   const blocked = await getBlockedSet();
   const filtered = filterTxs(txs).filter((tx) => !blocked.has(tx.to?.toLowerCase()));
-  const saved = await saveTxs(chainKey, chain, nextBlock, filtered, { skipIfSelectorExists: true });
+  const saved = await saveTxs(chainKey, chain, nextBlock, filtered);
 
   stats.blocks++;
   stats.total += txs.length;
@@ -98,6 +98,7 @@ function scheduleDailySnapshot() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await sequelize.runMigrations();
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
   syncIgnoreSwap();

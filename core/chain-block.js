@@ -63,8 +63,8 @@ function isDeadlock(err) {
 }
 
 // Lưu danh sách tx vào DB. Trả về số tx đã insert mới.
-// skipIfSelectorExists: bỏ qua nếu đã có tx cùng selector+to+type (dùng cho forward crawl)
-async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists = false } = {}) {
+// Mỗi (selector, to, type) chỉ được insert 1 lần — dùng in-memory cache + DB check.
+async function saveTxs(chainKey, chain, blockNumber, txs) {
   if (txs.length === 0) return 0;
 
   const allData = txs.map((tx) => ({
@@ -80,27 +80,26 @@ async function saveTxs(chainKey, chain, blockNumber, txs, { skipIfSelectorExists
     type: chainKey,
   }));
 
-  // Forward crawl: loại selector+to+type đã tồn tại dùng in-memory cache
-  // DB chỉ được query cho các pair chưa thấy bao giờ — sau vài block cache đủ và query gần như biến mất
-  let candidates = allData;
-  if (skipIfSelectorExists) {
-    const checks = allData.filter((t) => t.to);
-    if (checks.length > 0) {
-      const unknown = checks.filter((t) => !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
-      if (unknown.length > 0) {
-        const tuples = unknown
-          .map((t) => `(${sequelize.escape(t.selector)},${sequelize.escape(t.to)},${sequelize.escape(chainKey)})`)
-          .join(",");
-        const existing = await sequelize.query(
-          `SELECT selector, \`to\`, type FROM transactions WHERE (selector, \`to\`, type) IN (${tuples}) GROUP BY selector, \`to\`, type`,
-          { type: sequelize.QueryTypes.SELECT },
-        );
-        for (const e of existing) _seenSelectorPairs.add(`${e.selector}:${e.to}:${e.type}`);
-      }
-      candidates = allData.filter((t) => !t.to || !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
-      // Thêm các tx mới insert vào cache để block tiếp không cần check DB
-      for (const t of candidates.filter((t) => t.to)) _seenSelectorPairs.add(`${t.selector}:${t.to}:${chainKey}`);
+  // Loại selector+to+type đã tồn tại — in-memory cache là lớp đầu tiên,
+  // DB chỉ được query cho các pair chưa thấy bao giờ.
+  const checks = allData.filter((t) => t.to);
+  if (checks.length > 0) {
+    const unknown = checks.filter((t) => !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
+    if (unknown.length > 0) {
+      const tuples = unknown
+        .map((t) => `(${sequelize.escape(t.selector)},${sequelize.escape(t.to)},${sequelize.escape(chainKey)})`)
+        .join(",");
+      const existing = await sequelize.query(
+        `SELECT selector, \`to\`, type FROM transactions WHERE (selector, \`to\`, type) IN (${tuples}) GROUP BY selector, \`to\`, type`,
+        { type: sequelize.QueryTypes.SELECT },
+      );
+      for (const e of existing) _seenSelectorPairs.add(`${e.selector}:${e.to}:${e.type}`);
     }
+  }
+  const candidates = allData.filter((t) => !t.to || !_seenSelectorPairs.has(`${t.selector}:${t.to}:${chainKey}`));
+  // Thêm candidates mới vào cache để block tiếp không cần check DB
+  for (const t of candidates) {
+    if (t.to) _seenSelectorPairs.add(`${t.selector}:${t.to}:${chainKey}`);
   }
   if (candidates.length === 0) return 0;
 

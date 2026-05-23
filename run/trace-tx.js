@@ -165,6 +165,7 @@ async function scheduleBatch() {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await sequelize.runMigrations();
   // Sync tất cả ignore data từ sheet 1 lần khi khởi động
   await syncAll();
   log.info("Bat dau xu ly transactions...");

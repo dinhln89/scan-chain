@@ -10,6 +10,7 @@ const {
   saveTxs,
   makeStats,
   flushStats,
+  warmSelectorCache,
 } = require("../core/chain-block");
 const { createLogger } = require("../core/logger");
 require("dotenv").config({
@@ -108,9 +109,12 @@ function startChainLoop(chainKey, chain) {
 async function main() {
   await sequelize.ensureDatabase();
   await sequelize.sync();
+  await sequelize.runMigrations();
   await IgnoreAddress.syncFromSheet();
   await IgnoreMethod.syncFromSheet();
   syncIgnoreSwap();
+
+  await warmSelectorCache();
 
   for (const [chainKey, chain] of Object.entries(CHAIN_CONFIGS)) {
     startChainLoop(chainKey, chain);
