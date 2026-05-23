@@ -4,18 +4,6 @@ require("dotenv").config({
 
 const sequelize = require("../db");
 
-// Import để đăng ký models với sequelize trước khi sync
-require("../models/Transaction");
-require("../models/Contract");
-require("../models/ContractDecompile");
-require("../models/Setting");
-require("../models/Token");
-require("../models/User");
-require("../models/FourByteSelector");
-require("../models/IgnoreAddress");
-require("../models/History");
-require("../models/Proxy");
-
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 function withTimer(label) {
@@ -43,12 +31,16 @@ async function confirm(question) {
   });
 }
 
-async function getRowCount(table) {
+async function getApproxRowCounts(dbName, tableNames) {
   try {
-    const [[{ n }]] = await sequelize.query(`SELECT COUNT(*) AS n FROM \`${table}\``);
-    return Number(n);
+    const rows = await sequelize.query(
+      `SELECT TABLE_NAME, TABLE_ROWS FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME IN (${tableNames.map(() => "?").join(",")})`,
+      { replacements: [dbName, ...tableNames], type: sequelize.QueryTypes.SELECT },
+    );
+    return new Map(rows.map((r) => [r.TABLE_NAME, Number(r.TABLE_ROWS)]));
   } catch {
-    return null;
+    return new Map();
   }
 }
 
@@ -59,25 +51,33 @@ async function main() {
     return;
   }
 
-  const dbName = process.env.DB_NAME;
   let done;
 
   done = withTimer("Ket noi...");
-  await sequelize.ensureDatabase();
+  await sequelize.authenticate();
   done();
 
   console.log("");
-  done = withTimer(`DROP DATABASE \`${dbName}\`...`);
-  await sequelize.query(`DROP DATABASE \`${dbName}\``);
-  done();
 
-  done = withTimer(`CREATE DATABASE \`${dbName}\`...`);
-  await sequelize.query(`CREATE DATABASE \`${dbName}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
-  done();
+  const tables = await sequelize.query("SHOW TABLES", { type: sequelize.QueryTypes.SELECT });
+  const tableNames = tables.map((t) => Object.values(t)[0]);
 
-  done = withTimer("Tao lai tables + indexes...");
-  await sequelize.query(`USE \`${dbName}\``);
-  await sequelize.sync();
+  if (tableNames.length === 0) {
+    console.log("Khong co table nao.");
+    await sequelize.close();
+    return;
+  }
+
+  const rowCounts = await getApproxRowCounts(process.env.DB_NAME, tableNames);
+
+  done = withTimer(`TRUNCATE ${tableNames.length} tables...`);
+  await sequelize.query("SET FOREIGN_KEY_CHECKS = 0");
+  for (const table of tableNames) {
+    await sequelize.query(`TRUNCATE TABLE \`${table}\``);
+    const n = rowCounts.get(table);
+    process.stdout.write(`  ✓ ${table}${n != null ? ` (~${n} rows)` : ""}\n`);
+  }
+  await sequelize.query("SET FOREIGN_KEY_CHECKS = 1");
   done();
 
   await sequelize.close();
