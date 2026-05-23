@@ -3,6 +3,7 @@ require("dotenv").config({
 });
 
 const sequelize = require("../db");
+const { spawn } = require("child_process");
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
@@ -44,6 +45,23 @@ async function getApproxRowCounts(dbName, tableNames) {
   }
 }
 
+// Spawn background mysql process để DROP backup tables — user không cần chờ.
+// Lần chạy tiếp theo sẽ chờ qua metadata lock nếu DROP vẫn đang chạy.
+function dropTablesBackground(tableNames) {
+  const { DB_HOST = "localhost", DB_PORT = "3306", DB_USER, DB_PASSWORD, DB_NAME } = process.env;
+  const sql = [
+    "SET FOREIGN_KEY_CHECKS=0;",
+    ...tableNames.map((t) => `DROP TABLE IF EXISTS \`${t}\`;`),
+    "SET FOREIGN_KEY_CHECKS=1;",
+  ].join(" ");
+  const child = spawn(
+    "mysql",
+    [`-h${DB_HOST}`, `-P${DB_PORT}`, `-u${DB_USER}`, `-p${DB_PASSWORD}`, DB_NAME, "-e", sql],
+    { detached: true, stdio: "ignore" },
+  );
+  child.unref();
+}
+
 async function main() {
   const ok = await confirm("Xoa toan bo du lieu trong DB? (y/N): ");
   if (!ok) {
@@ -56,29 +74,53 @@ async function main() {
   done = withTimer("Ket noi...");
   await sequelize.authenticate();
   done();
-
   console.log("");
 
-  const tables = await sequelize.query("SHOW TABLES", { type: sequelize.QueryTypes.SELECT });
-  const tableNames = tables.map((t) => Object.values(t)[0]);
+  const allRows = await sequelize.query("SHOW TABLES", { type: sequelize.QueryTypes.SELECT });
+  const allTables = allRows.map((r) => Object.values(r)[0]);
+  const bakTables = allTables.filter((t) => t.endsWith("_bak"));
+  const mainTables = allTables.filter((t) => !t.endsWith("_bak"));
 
-  if (tableNames.length === 0) {
+  if (mainTables.length === 0) {
     console.log("Khong co table nao.");
     await sequelize.close();
     return;
   }
 
-  const rowCounts = await getApproxRowCounts(process.env.DB_NAME, tableNames);
+  // Xoa backup tables cu (tu lan chay truoc). MySQL metadata lock dam bao
+  // khong xung dot neu background DROP tu lan truoc van dang chay.
+  if (bakTables.length > 0) {
+    done = withTimer(`Xoa ${bakTables.length} backup tables cu...`);
+    await sequelize.query("SET FOREIGN_KEY_CHECKS = 0");
+    for (const t of bakTables) await sequelize.query(`DROP TABLE IF EXISTS \`${t}\``);
+    await sequelize.query("SET FOREIGN_KEY_CHECKS = 1");
+    done();
+  }
 
-  done = withTimer(`TRUNCATE ${tableNames.length} tables...`);
+  const rowCounts = await getApproxRowCounts(process.env.DB_NAME, mainTables);
+
+  // Doc schema truoc khi rename
+  const schemas = {};
+  for (const table of mainTables) {
+    const [[row]] = await sequelize.query(`SHOW CREATE TABLE \`${table}\``);
+    schemas[table] = row["Create Table"];
+  }
+
+  // RENAME → CREATE: O(1) bat ke table lon den dau
+  done = withTimer(`Reset ${mainTables.length} tables...`);
   await sequelize.query("SET FOREIGN_KEY_CHECKS = 0");
-  for (const table of tableNames) {
-    await sequelize.query(`TRUNCATE TABLE \`${table}\``);
+  for (const table of mainTables) {
+    await sequelize.query(`RENAME TABLE \`${table}\` TO \`${table}_bak\``);
+    await sequelize.query(schemas[table]);
     const n = rowCounts.get(table);
     process.stdout.write(`  ✓ ${table}${n != null ? ` (~${n} rows)` : ""}\n`);
   }
   await sequelize.query("SET FOREIGN_KEY_CHECKS = 1");
   done();
+
+  // Spawn background DROP — user khong can cho
+  dropTablesBackground(mainTables.map((t) => `${t}_bak`));
+  console.log("(Backup tables dang xoa ngam trong nen...)");
 
   await sequelize.close();
   console.log("\nDone.");
