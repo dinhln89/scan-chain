@@ -69,7 +69,6 @@ function startChainLoop(chainKey, chain) {
       delay = hadBlock ? 500 : 2000;
     } catch (err) {
       log.error(`[${chain.label}] Loi: ${err.message}`);
-      if (err.stack) log.error(err.stack);
       delay = 2000;
     }
     setTimeout(loop, delay);

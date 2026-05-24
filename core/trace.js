@@ -559,7 +559,8 @@ async function simulateTx(to, input, blockNumber, txIndex, gas) {
     return { error: null, notRevert: true, result: result || null };
   } catch (err) {
     const msg = err.message?.toLowerCase() ?? "";
-    if (!msg.includes("revert")) {
+    const isExpectedEvmError = /out of gas|invalid jump destination|invalid argument/i.test(msg);
+    if (!msg.includes("revert") && !isExpectedEvmError) {
       sendMessage(`❌ simulateTx error\n<code>${to}</code>\n${err.message}`);
     }
     return { error: err.message, notRevert: false, result: null };

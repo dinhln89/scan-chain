@@ -92,6 +92,11 @@ const IGNORED_ERRORS = new Set([
   "IGNORED_V3_PATH",
 ]);
 
+// EVM execution failures — deterministic, won't change on retry
+function isEvmExecutionError(msg) {
+  return /out of gas|invalid jump destination|invalid argument \d+: hex string/i.test(msg || "");
+}
+
 const MAX_RETRIES = 3;
 // retryCount: map tx.id → số lần lỗi, tránh tx lỗi liên tục chiếm slot mãi
 const retryCount = new Map();
@@ -106,10 +111,11 @@ async function processOne(tx) {
     retryCount.delete(tx.id);
     log.info(`[${chain}] DONE ${tx.hash} (${Date.now() - t0}ms)`);
   } catch (err) {
-    // Lỗi ignored hoặc revert: không có giá trị retry, đánh processed luôn
+    // Lỗi ignored, revert, hoặc EVM execution failure: không retry
     if (
       IGNORED_ERRORS.has(err.message) ||
-      err.message?.toLowerCase().includes("revert")
+      err.message?.toLowerCase().includes("revert") ||
+      isEvmExecutionError(err.message)
     ) {
       await tx.update({ processed: true });
       retryCount.delete(tx.id);
